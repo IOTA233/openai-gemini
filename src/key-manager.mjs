@@ -1,14 +1,13 @@
 class KeyManager {
   constructor() {
     this.keys = new Map(); // 存储key信息
-    this.currentKeyIndex = 0;
+    this.RATE_LIMIT = 10;  // 默认每分钟10次请求
   }
 
   // 添加新的API key
-  addKey(key, rateLimit = 10) {
+  addKey(key) {
     this.keys.set(key, {
       key,
-      rateLimit,  // 每分钟请求限制
       requestCount: 0,  // 当前分钟的请求数
       lastResetTime: Date.now(),  // 上次重置计数的时间
       isAvailable: true  // 当前key是否可用
@@ -27,8 +26,6 @@ class KeyManager {
 
   // 获取下一个可用的key
   getNextAvailableKey() {
-    const now = Date.now();
-
     // 检查所有key的状态
     for (let keyInfo of this.keys.values()) {
       this.resetKeyCount(keyInfo);
@@ -36,32 +33,30 @@ class KeyManager {
 
     // 查找可用的key
     for (let keyInfo of this.keys.values()) {
-      if (keyInfo.isAvailable && keyInfo.requestCount < keyInfo.rateLimit) {
+      if (keyInfo.isAvailable && keyInfo.requestCount < this.RATE_LIMIT) {
         keyInfo.requestCount++;
-        if (keyInfo.requestCount >= keyInfo.rateLimit) {
+        if (keyInfo.requestCount >= this.RATE_LIMIT) {
           keyInfo.isAvailable = false;
         }
         return keyInfo.key;
       }
     }
 
-    // 如果没有可用的key，返回null或抛出错误
-    throw new Error('No available API keys at the moment. Please try again later.');
+    // 如果没有可用的key，抛出错误
+    throw new Error('所有API密钥已达到速率限制，请稍后再试');
   }
 
   // 初始化keys
   initializeKeys(keys) {
-    if (!Array.isArray(keys)) {
-      // 如果传入的是单个key，转换为数组
-      keys = [{ key: keys, rateLimit: 10 }];
-    }
+    // 如果传入的是单个key，转换为数组
+    const keyArray = keys.includes(',') ? keys.split(',') : [keys];
 
     // 清除现有的keys
     this.keys.clear();
 
     // 添加新的keys
-    keys.forEach(({ key, rateLimit }) => {
-      this.addKey(key, rateLimit);
+    keyArray.forEach(key => {
+      this.addKey(key.trim());
     });
   }
 }
