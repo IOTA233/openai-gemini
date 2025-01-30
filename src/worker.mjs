@@ -11,21 +11,52 @@ export default {
       return new Response(err.message, fixCors({ status: err.status ?? 500 }));
     };
     try {
-      const auth = request.headers.get("Authorization");
-      let apiKeys = auth?.split(" ")[1];
+      // 获取并记录原始的 Authorization 头
+      const rawAuth = request.headers.get("Authorization");
+      console.log(JSON.stringify({
+        level: 'info',
+        type: 'raw_auth_header',
+        timestamp: new Date().toISOString(),
+        raw_authorization: rawAuth,
+        url: request.url,
+        method: request.method,
+        headers: Object.fromEntries(request.headers)  // 记录所有请求头
+      }));
 
-      // 处理API keys的初始化
-      try {
-        // 尝试解析JSON格式的keys配置
-        const keysConfig = JSON.parse(apiKeys);
-        keyManager.initializeKeys(keysConfig);
-      } catch (e) {
-        // 如果解析失败，则视为单个key
-        keyManager.initializeKeys(apiKeys);
-      }
+      let apiKeys = rawAuth?.split(" ")[1];
+
+      // 记录接收到的认证信息
+      console.log(JSON.stringify({
+        level: 'info',
+        type: 'request_auth',
+        timestamp: new Date().toISOString(),
+        auth_header: rawAuth,
+        parsed_keys: apiKeys,
+        url: request.url,
+        method: request.method
+      }));
+
+      // 初始化API keys
+      keyManager.initializeKeys(apiKeys);
+
+      // 记录初始化后的key状态
+      console.log(JSON.stringify({
+        level: 'info',
+        type: 'keys_status',
+        timestamp: new Date().toISOString(),
+        keys_status: keyManager.getKeysStatus()
+      }));
 
       // 获取可用的API key
       const activeKey = keyManager.getNextAvailableKey();
+
+      // 记录选择的key
+      console.log(JSON.stringify({
+        level: 'info',
+        type: 'selected_key',
+        timestamp: new Date().toISOString(),
+        selected_key: keyManager.maskKey(activeKey)
+      }));
 
       const assert = (success) => {
         if (!success) {
@@ -50,6 +81,14 @@ export default {
           throw new HttpError("404 Not Found", 404);
       }
     } catch (err) {
+      // 记录错误信息
+      console.error(JSON.stringify({
+        level: 'error',
+        type: 'request_error',
+        timestamp: new Date().toISOString(),
+        error: err.message,
+        stack: err.stack
+      }));
       return errHandler(err);
     }
   }
