@@ -40,7 +40,7 @@ export default {
         masked_key: keyManager.maskKey(activeKey),
         endpoint: request.url,
         method: request.method,
-        key_status: keyManager.getKeysStatus().find(k => k.key === keyManager.maskKey(activeKey))
+        key_status: keyManager.getKeyStatusSummary().keys.find(k => k.key === keyManager.maskKey(activeKey))
       }));
 
       const assert = (success) => {
