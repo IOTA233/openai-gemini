@@ -2,6 +2,8 @@ class KeyManager {
   constructor() {
     this.keys = new Map(); // 存储key信息
     this.RATE_LIMIT = 10;  // 默认每分钟10次请求
+    this.currentIndex = 0; // 添加一个索引来追踪当前使用的key
+    this.keyArray = [];    // 保存key的数组，用于轮换
     this.logs = []; // 存储日志
     this.MAX_LOGS = 1000; // 最多保存1000条日志
   }
@@ -65,20 +67,47 @@ class KeyManager {
     }
   }
 
+  // 初始化keys
+  initializeKeys(keys) {
+    // 如果传入的是单个key，转换为数组
+    this.keyArray = keys.includes(',') ? keys.split(',').map(k => k.trim()) : [keys];
+
+    this.addLog('system', 'keys_initialization', {
+      keyCount: this.keyArray.length,
+      keys: this.keyArray.map(k => this.maskKey(k))
+    });
+
+    // 清除现有的keys
+    this.keys.clear();
+    this.currentIndex = 0;
+
+    // 添加新的keys
+    this.keyArray.forEach(key => {
+      this.addKey(key.trim());
+    });
+  }
+
   // 获取下一个可用的key
   getNextAvailableKey() {
+    const startIndex = this.currentIndex;
+    let attempts = 0;
+
     // 检查所有key的状态
     for (let keyInfo of this.keys.values()) {
       this.resetKeyCount(keyInfo);
     }
 
-    // 查找可用的key
-    for (let keyInfo of this.keys.values()) {
+    // 尝试所有key直到找到一个可用的
+    while (attempts < this.keyArray.length) {
+      const currentKey = this.keyArray[this.currentIndex];
+      const keyInfo = this.keys.get(currentKey);
+
       if (keyInfo.isAvailable && keyInfo.requestCount < this.RATE_LIMIT) {
         keyInfo.requestCount++;
         keyInfo.totalRequests++;
 
-        this.addLog(keyInfo.key, 'key_used', {
+        this.addLog(currentKey, 'key_used', {
+          keyIndex: this.currentIndex,
           currentMinuteRequests: keyInfo.requestCount,
           totalRequests: keyInfo.totalRequests,
           remainingQuota: this.RATE_LIMIT - keyInfo.requestCount
@@ -86,13 +115,20 @@ class KeyManager {
 
         if (keyInfo.requestCount >= this.RATE_LIMIT) {
           keyInfo.isAvailable = false;
-          this.addLog(keyInfo.key, 'key_quota_exceeded', {
+          this.addLog(currentKey, 'key_quota_exceeded', {
             totalRequests: keyInfo.totalRequests
           });
         }
 
-        return keyInfo.key;
+        // 移动到下一个key，实现轮换
+        this.currentIndex = (this.currentIndex + 1) % this.keyArray.length;
+
+        return currentKey;
       }
+
+      // 移动到下一个key
+      this.currentIndex = (this.currentIndex + 1) % this.keyArray.length;
+      attempts++;
     }
 
     // 如果没有可用的key，记录错误并抛出
@@ -102,7 +138,8 @@ class KeyManager {
         key: this.maskKey(k.key),
         requestCount: k.requestCount,
         isAvailable: k.isAvailable,
-        totalRequests: k.totalRequests
+        totalRequests: k.totalRequests,
+        currentIndex: this.currentIndex
       }))
     });
 
@@ -118,24 +155,6 @@ class KeyManager {
       totalRequests: k.totalRequests,
       lastResetTime: new Date(k.lastResetTime).toISOString()
     }));
-  }
-
-  // 初始化keys
-  initializeKeys(keys) {
-    // 如果传入的是单个key，转换为数组
-    const keyArray = keys.includes(',') ? keys.split(',') : [keys];
-
-    this.addLog('system', 'keys_initialization', {
-      keyCount: keyArray.length
-    });
-
-    // 清除现有的keys
-    this.keys.clear();
-
-    // 添加新的keys
-    keyArray.forEach(key => {
-      this.addKey(key.trim());
-    });
   }
 }
 

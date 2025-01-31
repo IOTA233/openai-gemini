@@ -20,42 +20,27 @@ export default {
         raw_authorization: rawAuth,
         url: request.url,
         method: request.method,
-        headers: Object.fromEntries(request.headers)  // 记录所有请求头
+        headers: Object.fromEntries(request.headers)
       }));
 
       let apiKeys = rawAuth?.split(" ")[1];
 
-      // 记录接收到的认证信息
-      console.log(JSON.stringify({
-        level: 'info',
-        type: 'request_auth',
-        timestamp: new Date().toISOString(),
-        auth_header: rawAuth,
-        parsed_keys: apiKeys,
-        url: request.url,
-        method: request.method
-      }));
-
       // 初始化API keys
       keyManager.initializeKeys(apiKeys);
-
-      // 记录初始化后的key状态
-      console.log(JSON.stringify({
-        level: 'info',
-        type: 'keys_status',
-        timestamp: new Date().toISOString(),
-        keys_status: keyManager.getKeysStatus()
-      }));
 
       // 获取可用的API key
       const activeKey = keyManager.getNextAvailableKey();
 
-      // 记录选择的key
+      // 记录本次请求实际使用的key
       console.log(JSON.stringify({
         level: 'info',
-        type: 'selected_key',
+        type: 'active_key_info',
         timestamp: new Date().toISOString(),
-        selected_key: keyManager.maskKey(activeKey)
+        active_key: activeKey,        // 完整key，用于调试
+        masked_key: keyManager.maskKey(activeKey),
+        endpoint: request.url,
+        method: request.method,
+        key_status: keyManager.getKeysStatus().find(k => k.key === keyManager.maskKey(activeKey))
       }));
 
       const assert = (success) => {
