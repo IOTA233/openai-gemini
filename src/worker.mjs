@@ -15,19 +15,6 @@ export default {
       const { pathname } = new URL(request.url);
       const requestBody = request.method === "POST" ? await request.json() : null;
 
-      // 记录请求信息
-      console.log(JSON.stringify({
-        timestamp: new Date().toISOString(),
-        method: request.method,
-        path: pathname,
-        headers: {
-          authorization: request.headers.get("Authorization")?.replace(/Bearer\s+/, "Bearer ..."),
-          "content-type": request.headers.get("content-type"),
-          "user-agent": request.headers.get("user-agent")
-        },
-        body: requestBody
-      }, null, 2));
-
       const auth = request.headers.get("Authorization");
       let apiKeys = auth?.split(" ")[1];
 
@@ -184,10 +171,22 @@ async function handleCompletions(req, apiKey) {
   const TASK = req.stream ? "streamGenerateContent" : "generateContent";
   let url = `${BASE_URL}/${API_VERSION}/models/${model}:${TASK}`;
   if (req.stream) { url += "?alt=sse"; }
+
+  const requestBody = await transformRequest(req);
+
+  // 记录实际发送的请求内容
+  console.log(JSON.stringify({
+    timestamp: new Date().toISOString(),
+    type: 'outgoing_request',
+    url: url,
+    headers: makeHeaders(apiKey, { "Content-Type": "application/json" }),
+    body: requestBody
+  }, null, 2));
+
   const response = await fetch(url, {
     method: "POST",
     headers: makeHeaders(apiKey, { "Content-Type": "application/json" }),
-    body: JSON.stringify(await transformRequest(req)), // try
+    body: JSON.stringify(requestBody),
   });
 
   let body = response.body;
