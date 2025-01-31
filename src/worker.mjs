@@ -11,19 +11,25 @@ export default {
       return new Response(err.message, fixCors({ status: err.status ?? 500 }));
     };
     try {
-      // 获取并记录原始的 Authorization 头
-      const rawAuth = request.headers.get("Authorization");
-      console.log(JSON.stringify({
-        level: 'info',
-        type: 'raw_auth_header',
-        timestamp: new Date().toISOString(),
-        raw_authorization: rawAuth,
-        url: request.url,
-        method: request.method,
-        headers: Object.fromEntries(request.headers)
-      }));
+      // 获取请求信息
+      const { pathname } = new URL(request.url);
+      const requestBody = request.method === "POST" ? await request.json() : null;
 
-      let apiKeys = rawAuth?.split(" ")[1];
+      // 记录请求信息
+      console.log(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        method: request.method,
+        path: pathname,
+        headers: {
+          authorization: request.headers.get("Authorization")?.replace(/Bearer\s+/, "Bearer ..."),
+          "content-type": request.headers.get("content-type"),
+          "user-agent": request.headers.get("user-agent")
+        },
+        body: requestBody
+      }, null, 2));
+
+      const auth = request.headers.get("Authorization");
+      let apiKeys = auth?.split(" ")[1];
 
       // 初始化API keys
       keyManager.initializeKeys(apiKeys);
@@ -31,32 +37,20 @@ export default {
       // 获取可用的API key
       const activeKey = keyManager.getNextAvailableKey();
 
-      // 记录本次请求实际使用的key
-      console.log(JSON.stringify({
-        level: 'info',
-        type: 'active_key_info',
-        timestamp: new Date().toISOString(),
-        active_key: activeKey,        // 完整key，用于调试
-        masked_key: keyManager.maskKey(activeKey),
-        endpoint: request.url,
-        method: request.method,
-        key_status: keyManager.getKeyStatusSummary().keys.find(k => k.key === keyManager.maskKey(activeKey))
-      }));
-
       const assert = (success) => {
         if (!success) {
           throw new HttpError("The specified HTTP method is not allowed for the requested resource", 400);
         }
       };
-      const { pathname } = new URL(request.url);
+
       switch (true) {
         case pathname.endsWith("/chat/completions"):
           assert(request.method === "POST");
-          return handleCompletions(await request.json(), activeKey)
+          return handleCompletions(requestBody, activeKey)
             .catch(errHandler);
         case pathname.endsWith("/embeddings"):
           assert(request.method === "POST");
-          return handleEmbeddings(await request.json(), activeKey)
+          return handleEmbeddings(requestBody, activeKey)
             .catch(errHandler);
         case pathname.endsWith("/models"):
           assert(request.method === "GET");
@@ -68,11 +62,9 @@ export default {
     } catch (err) {
       // 记录错误信息
       console.error(JSON.stringify({
-        level: 'error',
-        type: 'request_error',
         timestamp: new Date().toISOString(),
         error: err.message,
-        stack: err.stack
+        type: 'request_error'
       }));
       return errHandler(err);
     }

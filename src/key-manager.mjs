@@ -15,10 +15,6 @@ class KeyManager {
     const newKeys = newKeyArray.join(',');
 
     if (this.initialized && currentKeys === newKeys) {
-      console.log(JSON.stringify({
-        action: 'keys_already_initialized',
-        ...this.getKeyStatusSummary()
-      }, null, 2));
       return;
     }
 
@@ -29,12 +25,6 @@ class KeyManager {
 
     // 添加新的keys
     this.keyArray.forEach(key => this.addKey(key.trim()));
-
-    // 输出初始状态
-    console.log(JSON.stringify({
-      action: 'keys_initialized',
-      ...this.getKeyStatusSummary()
-    }, null, 2));
   }
 
   // 添加新的API key
@@ -48,40 +38,10 @@ class KeyManager {
     });
   }
 
-  // 获取key状态的简要信息
-  getKeyStatusSummary() {
-    const now = Date.now();
-    return {
-      timestamp: new Date().toISOString(),
-      currentKey: this.maskKey(this.keyArray[this.currentIndex]),
-      keys: Array.from(this.keys.values()).map(k => ({
-        key: this.maskKey(k.key),
-        requestCount: k.requestCount,
-        timeUntilReset: Math.max(0, 60 - Math.floor((now - k.lastResetTime) / 1000)),
-        isAvailable: k.isAvailable,
-        totalRequests: k.totalRequests
-      }))
-    };
-  }
-
-  // 隐藏key的中间部分
-  maskKey(key) {
-    if (key.length <= 8) return key;
-    return `${key.slice(0, 4)}...${key.slice(-4)}`;
-  }
-
   // 重置指定key的请求计数
   resetKeyCount(keyInfo) {
     const now = Date.now();
     if (now - keyInfo.lastResetTime >= 60000) {
-      console.log(JSON.stringify({
-        action: 'reset_counter',
-        key: this.maskKey(keyInfo.key),
-        old_count: keyInfo.requestCount,
-        reset_time: new Date(keyInfo.lastResetTime).toISOString(),
-        current_time: new Date(now).toISOString()
-      }));
-
       keyInfo.requestCount = 0;
       keyInfo.lastResetTime = now;
       keyInfo.isAvailable = true;
@@ -95,13 +55,6 @@ class KeyManager {
       this.resetKeyCount(keyInfo);
     }
 
-    // 打印当前状态
-    console.log(JSON.stringify({
-      action: 'before_key_selection',
-      ...this.getKeyStatusSummary()
-    }, null, 2));
-
-    const startIndex = this.currentIndex;
     let attempts = 0;
 
     // 尝试所有key直到找到一个可用的
@@ -109,26 +62,9 @@ class KeyManager {
       const currentKey = this.keyArray[this.currentIndex];
       const keyInfo = this.keys.get(currentKey);
 
-      console.log(JSON.stringify({
-        action: 'checking_key',
-        key: this.maskKey(currentKey),
-        requestCount: keyInfo.requestCount,
-        isAvailable: keyInfo.isAvailable,
-        timeUntilReset: Math.max(0, 60 - Math.floor((Date.now() - keyInfo.lastResetTime) / 1000))
-      }));
-
       if (keyInfo.isAvailable && keyInfo.requestCount < this.RATE_LIMIT) {
         keyInfo.requestCount++;
         keyInfo.totalRequests++;
-
-        // 记录key使用情况
-        console.log(JSON.stringify({
-          action: 'key_selected',
-          key: this.maskKey(currentKey),
-          newRequestCount: keyInfo.requestCount,
-          totalRequests: keyInfo.totalRequests,
-          timeUntilReset: Math.max(0, 60 - Math.floor((Date.now() - keyInfo.lastResetTime) / 1000))
-        }));
 
         if (keyInfo.requestCount >= this.RATE_LIMIT) {
           keyInfo.isAvailable = false;
@@ -136,12 +72,6 @@ class KeyManager {
 
         // 移动到下一个key
         this.currentIndex = (this.currentIndex + 1) % this.keyArray.length;
-
-        // 打印最终状态
-        console.log(JSON.stringify({
-          action: 'after_key_selection',
-          ...this.getKeyStatusSummary()
-        }, null, 2));
 
         return currentKey;
       }
@@ -151,14 +81,14 @@ class KeyManager {
       attempts++;
     }
 
-    // 如果没有可用的key，输出状态并抛出错误
-    const status = this.getKeyStatusSummary();
-    console.log(JSON.stringify({
-      error: '所有API密钥已达到速率限制',
-      ...status
-    }, null, 2));
-
+    // 如果没有可用的key，抛出错误
     throw new Error('所有API密钥已达到速率限制，请稍后再试');
+  }
+
+  // 隐藏key的中间部分
+  maskKey(key) {
+    if (key.length <= 8) return key;
+    return `${key.slice(0, 4)}...${key.slice(-4)}`;
   }
 }
 
