@@ -4,6 +4,37 @@ class KeyManager {
     this.RATE_LIMIT = 10;  // 默认每分钟10次请求
     this.currentIndex = 0; // 添加一个索引来追踪当前使用的key
     this.keyArray = [];    // 保存key的数组，用于轮换
+    this.initialized = false; // 添加初始化标志
+  }
+
+  // 初始化keys
+  initializeKeys(keys) {
+    // 如果已经初始化过，且keys没有变化，则不重新初始化
+    const newKeyArray = keys.includes(',') ? keys.split(',').map(k => k.trim()) : [keys];
+    const currentKeys = this.keyArray.join(',');
+    const newKeys = newKeyArray.join(',');
+
+    if (this.initialized && currentKeys === newKeys) {
+      console.log(JSON.stringify({
+        action: 'keys_already_initialized',
+        ...this.getKeyStatusSummary()
+      }, null, 2));
+      return;
+    }
+
+    this.keyArray = newKeyArray;
+    this.keys.clear();
+    this.currentIndex = 0;
+    this.initialized = true;
+
+    // 添加新的keys
+    this.keyArray.forEach(key => this.addKey(key.trim()));
+
+    // 输出初始状态
+    console.log(JSON.stringify({
+      action: 'keys_initialized',
+      ...this.getKeyStatusSummary()
+    }, null, 2));
   }
 
   // 添加新的API key
@@ -70,8 +101,11 @@ class KeyManager {
       ...this.getKeyStatusSummary()
     }, null, 2));
 
+    const startIndex = this.currentIndex;
+    let attempts = 0;
+
     // 尝试所有key直到找到一个可用的
-    for (let i = 0; i < this.keyArray.length; i++) {
+    while (attempts < this.keyArray.length) {
       const currentKey = this.keyArray[this.currentIndex];
       const keyInfo = this.keys.get(currentKey);
 
@@ -79,7 +113,8 @@ class KeyManager {
         action: 'checking_key',
         key: this.maskKey(currentKey),
         requestCount: keyInfo.requestCount,
-        isAvailable: keyInfo.isAvailable
+        isAvailable: keyInfo.isAvailable,
+        timeUntilReset: Math.max(0, 60 - Math.floor((Date.now() - keyInfo.lastResetTime) / 1000))
       }));
 
       if (keyInfo.isAvailable && keyInfo.requestCount < this.RATE_LIMIT) {
@@ -91,7 +126,8 @@ class KeyManager {
           action: 'key_selected',
           key: this.maskKey(currentKey),
           newRequestCount: keyInfo.requestCount,
-          totalRequests: keyInfo.totalRequests
+          totalRequests: keyInfo.totalRequests,
+          timeUntilReset: Math.max(0, 60 - Math.floor((Date.now() - keyInfo.lastResetTime) / 1000))
         }));
 
         if (keyInfo.requestCount >= this.RATE_LIMIT) {
@@ -112,6 +148,7 @@ class KeyManager {
 
       // 移动到下一个key
       this.currentIndex = (this.currentIndex + 1) % this.keyArray.length;
+      attempts++;
     }
 
     // 如果没有可用的key，输出状态并抛出错误
@@ -122,22 +159,6 @@ class KeyManager {
     }, null, 2));
 
     throw new Error('所有API密钥已达到速率限制，请稍后再试');
-  }
-
-  // 初始化keys
-  initializeKeys(keys) {
-    this.keyArray = keys.includes(',') ? keys.split(',').map(k => k.trim()) : [keys];
-    this.keys.clear();
-    this.currentIndex = 0;
-
-    // 添加新的keys
-    this.keyArray.forEach(key => this.addKey(key.trim()));
-
-    // 输出初始状态
-    console.log(JSON.stringify({
-      action: 'keys_initialized',
-      ...this.getKeyStatusSummary()
-    }, null, 2));
   }
 }
 
