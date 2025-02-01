@@ -22,7 +22,7 @@ export default {
       keyManager.initializeKeys(apiKeys);
 
       // 获取可用的API key
-      const activeKey = keyManager.getNextAvailableKey();
+      const activeKey = await keyManager.getNextAvailableKey();
 
       const assert = (success) => {
         if (!success) {
@@ -173,6 +173,9 @@ async function handleCompletions(req, apiKey) {
   if (req.stream) { url += "?alt=sse"; }
 
   const requestBody = await transformRequest(req);
+
+  // 需要等待获取 key
+  const apiKey = await keyManager.getNextAvailableKey();
 
   // 记录实际发送的请求内容
   console.log(JSON.stringify({
