@@ -182,21 +182,24 @@ async function handleCompletions(req, apiKey) {
 
     const requestBody = await transformRequest(req);
 
-    // 需要等待获取 key
-    const apiKey = await keyManager.getNextAvailableKey();
+    // 获取API密钥并检查限流状态
+    const activeKey = await keyManager.getNextAvailableKey();
+    if (!activeKey) {
+      throw new HttpError("Rate limit exceeded. Please try again later.", 429);
+    }
 
     // 记录实际发送的请求内容
     console.log(JSON.stringify({
       timestamp: new Date().toISOString(),
       type: 'outgoing_request',
       url: url,
-      headers: makeHeaders(apiKey, { "Content-Type": "application/json" }),
+      headers: makeHeaders(activeKey, { "Content-Type": "application/json" }),
       body: requestBody
     }, null, 2));
 
     const response = await fetch(url, {
       method: "POST",
-      headers: makeHeaders(apiKey, { "Content-Type": "application/json" }),
+      headers: makeHeaders(activeKey, { "Content-Type": "application/json" }),
       body: JSON.stringify(requestBody),
     });
 
