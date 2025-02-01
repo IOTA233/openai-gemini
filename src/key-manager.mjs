@@ -1,114 +1,95 @@
 class KeyManager {
   constructor() {
-    this.keys = new Map(); // 存储key信息
-    this.RATE_LIMIT = 10;  // 默认每分钟10次请求
-    this.currentIndex = 0; // 添加一个索引来追踪当前使用的key
-    this.keyArray = [];    // 保存key的数组，用于轮换
-    this.initialized = false; // 添加初始化标志
-    this.mutex = Promise.resolve(); // 添加互斥锁
+    this.keys = [];
+    this.currentKeyIndex = 0;
+    this.requestCounts = new Map(); // 记录每个key的请求次数
+    this.pendingRequests = new Map(); // 记录每个key的待处理请求数
   }
 
-  // 初始化keys
-  initializeKeys(keys) {
-    // 如果已经初始化过，且keys没有变化，则不重新初始化
-    const newKeyArray = keys.includes(',') ? keys.split(',').map(k => k.trim()) : [keys];
-    const currentKeys = this.keyArray.join(',');
-    const newKeys = newKeyArray.join(',');
-
-    if (this.initialized && currentKeys === newKeys) {
-      return;
-    }
-
-    this.keyArray = newKeyArray;
-    this.keys.clear();
-    this.currentIndex = 0;
-    this.initialized = true;
-
-    // 添加新的keys
-    this.keyArray.forEach(key => this.addKey(key.trim()));
-  }
-
-  // 添加新的API key
-  addKey(key) {
-    this.keys.set(key, {
-      key,
-      requestCount: 0,  // 当前分钟的请求数
-      lastResetTime: Date.now(),  // 上次重置计数的时间
-      isAvailable: true,  // 当前key是否可用
-      totalRequests: 0,    // 总请求次数
-      lastMinute: Math.floor(Date.now() / 60000) // 添加lastMinute属性
+  initializeKeys(apiKeys) {
+    if (!apiKeys) return;
+    this.keys = apiKeys.split(',').map(key => key.trim());
+    // 初始化每个key的计数器
+    this.keys.forEach(key => {
+      if (!this.requestCounts.has(key)) {
+        this.requestCounts.set(key, 0);
+        this.pendingRequests.set(key, 0);
+      }
     });
   }
 
-  // 重置指定key的请求计数
-  resetKeyCount(keyInfo) {
-    const currentMinute = Math.floor(Date.now() / 60000);
-    if (keyInfo.lastMinute !== currentMinute) {
-      keyInfo.requestCount = 0;
-      keyInfo.lastMinute = currentMinute;
-      keyInfo.isAvailable = true;
-    }
-  }
-
-  // 获取下一个可用的key
   async getNextAvailableKey() {
-    // 使用互斥锁确保同一时间只有一个请求能获取 key
-    const release = await this.acquireMutex();
-    try {
-      // 检查所有key的状态
-      for (let keyInfo of this.keys.values()) {
-        this.resetKeyCount(keyInfo);
-      }
-
-      let attempts = 0;
-      while (attempts < this.keyArray.length) {
-        const currentKey = this.keyArray[this.currentIndex];
-        const keyInfo = this.keys.get(currentKey);
-
-        if (keyInfo.isAvailable && keyInfo.requestCount < this.RATE_LIMIT) {
-          keyInfo.requestCount++;
-          keyInfo.totalRequests++;
-
-          if (keyInfo.requestCount >= this.RATE_LIMIT) {
-            keyInfo.isAvailable = false;
-          }
-
-          this.currentIndex = (this.currentIndex + 1) % this.keyArray.length;
-          return currentKey;
-        }
-
-        this.currentIndex = (this.currentIndex + 1) % this.keyArray.length;
-        attempts++;
-      }
-
-      throw new Error('所有API密钥已达到速率限制，请稍后再试');
-    } finally {
-      release(); // 释放锁
+    if (this.keys.length === 0) {
+      throw new Error("No API keys available");
     }
+
+    const currentKey = this.keys[this.currentKeyIndex];
+    const currentCount = this.requestCounts.get(currentKey);
+    const pendingCount = this.pendingRequests.get(currentKey);
+    const totalRequests = currentCount + pendingCount;
+
+    // 如果当前key的总请求数（已完成+待处理）达到10次，切换到下一个key
+    if (totalRequests >= 10) {
+      this.currentKeyIndex = (this.currentKeyIndex + 1) % this.keys.length;
+      // 重置新key的计数
+      const newKey = this.keys[this.currentKeyIndex];
+      this.requestCounts.set(newKey, 0);
+      this.pendingRequests.set(newKey, 0);
+
+      // 记录key切换日志
+      console.log(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        type: 'key_switch',
+        previousKey: `...${currentKey.slice(-4)}`,
+        newKey: `...${newKey.slice(-4)}`,
+        reason: 'Request limit reached'
+      }));
+
+      return this.getNextAvailableKey();
+    }
+
+    // 增加待处理请求计数
+    this.pendingRequests.set(currentKey, pendingCount + 1);
+
+    // 异步处理请求完成后的计数更新
+    setTimeout(() => {
+      this.pendingRequests.set(currentKey, this.pendingRequests.get(currentKey) - 1);
+      this.requestCounts.set(currentKey, this.requestCounts.get(currentKey) + 1);
+
+      // 记录请求计数日志
+      console.log(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        type: 'key_usage',
+        key: `...${currentKey.slice(-4)}`,
+        completedRequests: this.requestCounts.get(currentKey),
+        pendingRequests: this.pendingRequests.get(currentKey)
+      }));
+    }, 0);
+
+    return currentKey;
   }
 
-  // 获取互斥锁
-  async acquireMutex() {
-    let release;
-    const newMutex = new Promise(resolve => {
-      release = resolve;
+  // 用于重置计数器（每分钟调用一次）
+  resetCounters() {
+    this.keys.forEach(key => {
+      this.requestCounts.set(key, 0);
+      this.pendingRequests.set(key, 0);
     });
+    this.currentKeyIndex = 0;
 
-    const oldMutex = this.mutex;
-    this.mutex = newMutex;
-
-    await oldMutex;
-    return release;
-  }
-
-  // 隐藏key的中间部分
-  maskKey(key) {
-    if (key.length <= 8) return key;
-    return `${key.slice(0, 4)}...${key.slice(-4)}`;
+    console.log(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      type: 'counters_reset',
+      message: 'All key counters have been reset'
+    }));
   }
 }
 
-// 创建单例实例
 const keyManager = new KeyManager();
+
+// 设置每分钟重置计数器
+setInterval(() => {
+  keyManager.resetCounters();
+}, 60 * 1000);
 
 export default keyManager; 
