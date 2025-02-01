@@ -17,14 +17,6 @@ export default {
       return new Response(err.message, fixCors({ status: err.status ?? 500 }));
     };
     try {
-      console.log(JSON.stringify({
-        timestamp: new Date().toISOString(),
-        method: request.method,
-        url: request.url,
-        headers: Object.fromEntries(request.headers),
-        type: 'incoming_request'
-      }));
-
       // 获取请求信息
       const { pathname } = new URL(request.url);
       const requestBody = request.method === "POST" ? await request.json() : null;
@@ -173,12 +165,6 @@ async function handleEmbeddings(req, apiKey) {
 const DEFAULT_MODEL = "gemini-1.5-pro-latest";
 async function handleCompletions(req, apiKey) {
   try {
-    console.log(JSON.stringify({
-      timestamp: new Date().toISOString(),
-      type: 'completions_request',
-      body: req
-    }));
-
     let model = DEFAULT_MODEL;
     switch (true) {
       case typeof req.model !== "string":
