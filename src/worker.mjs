@@ -7,10 +7,24 @@ export default {
       return handleOPTIONS();
     }
     const errHandler = (err) => {
-      console.error(err);
+      console.error(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        error: err.message,
+        stack: err.stack,
+        status: err.status,
+        type: 'error_handler'
+      }));
       return new Response(err.message, fixCors({ status: err.status ?? 500 }));
     };
     try {
+      console.log(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        method: request.method,
+        url: request.url,
+        headers: Object.fromEntries(request.headers),
+        type: 'incoming_request'
+      }));
+
       // 获取请求信息
       const { pathname } = new URL(request.url);
       const requestBody = request.method === "POST" ? await request.json() : null;
@@ -47,10 +61,11 @@ export default {
           throw new HttpError("404 Not Found", 404);
       }
     } catch (err) {
-      // 记录错误信息
       console.error(JSON.stringify({
         timestamp: new Date().toISOString(),
         error: err.message,
+        stack: err.stack,
+        status: err.status,
         type: 'request_error'
       }));
       return errHandler(err);
@@ -157,65 +172,90 @@ async function handleEmbeddings(req, apiKey) {
 
 const DEFAULT_MODEL = "gemini-1.5-pro-latest";
 async function handleCompletions(req, apiKey) {
-  let model = DEFAULT_MODEL;
-  switch (true) {
-    case typeof req.model !== "string":
-      break;
-    case req.model.startsWith("models/"):
-      model = req.model.substring(7);
-      break;
-    case req.model.startsWith("gemini-"):
-    case req.model.startsWith("learnlm-"):
-      model = req.model;
-  }
-  const TASK = req.stream ? "streamGenerateContent" : "generateContent";
-  let url = `${BASE_URL}/${API_VERSION}/models/${model}:${TASK}`;
-  if (req.stream) { url += "?alt=sse"; }
+  try {
+    console.log(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      type: 'completions_request',
+      body: req
+    }));
 
-  const requestBody = await transformRequest(req);
-
-  // 需要等待获取 key
-  const apiKey = await keyManager.getNextAvailableKey();
-
-  // 记录实际发送的请求内容
-  console.log(JSON.stringify({
-    timestamp: new Date().toISOString(),
-    type: 'outgoing_request',
-    url: url,
-    headers: makeHeaders(apiKey, { "Content-Type": "application/json" }),
-    body: requestBody
-  }, null, 2));
-
-  const response = await fetch(url, {
-    method: "POST",
-    headers: makeHeaders(apiKey, { "Content-Type": "application/json" }),
-    body: JSON.stringify(requestBody),
-  });
-
-  let body = response.body;
-  if (response.ok) {
-    let id = generateChatcmplId(); //"chatcmpl-8pMMaqXMK68B3nyDBrapTDrhkHBQK";
-    if (req.stream) {
-      body = response.body
-        .pipeThrough(new TextDecoderStream())
-        .pipeThrough(new TransformStream({
-          transform: parseStream,
-          flush: parseStreamFlush,
-          buffer: "",
-        }))
-        .pipeThrough(new TransformStream({
-          transform: toOpenAiStream,
-          flush: toOpenAiStreamFlush,
-          streamIncludeUsage: req.stream_options?.include_usage,
-          model, id, last: [],
-        }))
-        .pipeThrough(new TextEncoderStream());
-    } else {
-      body = await response.text();
-      body = processCompletionsResponse(JSON.parse(body), model, id);
+    let model = DEFAULT_MODEL;
+    switch (true) {
+      case typeof req.model !== "string":
+        break;
+      case req.model.startsWith("models/"):
+        model = req.model.substring(7);
+        break;
+      case req.model.startsWith("gemini-"):
+      case req.model.startsWith("learnlm-"):
+        model = req.model;
     }
+    const TASK = req.stream ? "streamGenerateContent" : "generateContent";
+    let url = `${BASE_URL}/${API_VERSION}/models/${model}:${TASK}`;
+    if (req.stream) { url += "?alt=sse"; }
+
+    const requestBody = await transformRequest(req);
+
+    // 需要等待获取 key
+    const apiKey = await keyManager.getNextAvailableKey();
+
+    // 记录实际发送的请求内容
+    console.log(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      type: 'outgoing_request',
+      url: url,
+      headers: makeHeaders(apiKey, { "Content-Type": "application/json" }),
+      body: requestBody
+    }, null, 2));
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: makeHeaders(apiKey, { "Content-Type": "application/json" }),
+      body: JSON.stringify(requestBody),
+    });
+
+    // 记录API响应状态
+    console.log(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      type: 'api_response',
+      status: response.status,
+      statusText: response.statusText,
+      headers: Object.fromEntries(response.headers)
+    }));
+
+    let body = response.body;
+    if (response.ok) {
+      let id = generateChatcmplId(); //"chatcmpl-8pMMaqXMK68B3nyDBrapTDrhkHBQK";
+      if (req.stream) {
+        body = response.body
+          .pipeThrough(new TextDecoderStream())
+          .pipeThrough(new TransformStream({
+            transform: parseStream,
+            flush: parseStreamFlush,
+            buffer: "",
+          }))
+          .pipeThrough(new TransformStream({
+            transform: toOpenAiStream,
+            flush: toOpenAiStreamFlush,
+            streamIncludeUsage: req.stream_options?.include_usage,
+            model, id, last: [],
+          }))
+          .pipeThrough(new TextEncoderStream());
+      } else {
+        body = await response.text();
+        body = processCompletionsResponse(JSON.parse(body), model, id);
+      }
+    }
+    return new Response(body, fixCors(response));
+  } catch (error) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      type: 'completions_error',
+      error: error.message,
+      stack: error.stack
+    }));
+    throw error;
   }
-  return new Response(body, fixCors(response));
 }
 
 const harmCategory = [
