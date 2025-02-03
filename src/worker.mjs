@@ -27,8 +27,11 @@ export default {
       // 初始化API keys
       keyManager.initializeKeys(apiKeys);
 
-      // 获取可用的API key
+      // 只获取一次 API key
       const activeKey = await keyManager.getNextAvailableKey();
+      if (!activeKey) {
+        throw new HttpError("Rate limit exceeded. Please try again later.", 429);
+      }
 
       const assert = (success) => {
         if (!success) {
@@ -163,7 +166,7 @@ async function handleEmbeddings(req, apiKey) {
 }
 
 const DEFAULT_MODEL = "gemini-1.5-pro-latest";
-async function handleCompletions(req, apiKey) {
+async function handleCompletions(req, activeKey) {
   try {
     let model = DEFAULT_MODEL;
     switch (true) {
@@ -182,13 +185,7 @@ async function handleCompletions(req, apiKey) {
 
     const requestBody = await transformRequest(req);
 
-    // 获取API密钥并检查限流状态
-    const activeKey = await keyManager.getNextAvailableKey();
-    if (!activeKey) {
-      throw new HttpError("Rate limit exceeded. Please try again later.", 429);
-    }
-
-    // 记录实际发送的请求内容
+    // 直接使用传入的 activeKey
     console.log(JSON.stringify({
       timestamp: new Date().toISOString(),
       type: 'outgoing_request',
@@ -214,7 +211,7 @@ async function handleCompletions(req, apiKey) {
 
     let body = response.body;
     if (response.ok) {
-      let id = generateChatcmplId(); //"chatcmpl-8pMMaqXMK68B3nyDBrapTDrhkHBQK";
+      let id = generateChatcmplId();
       if (req.stream) {
         body = response.body
           .pipeThrough(new TextDecoderStream())
