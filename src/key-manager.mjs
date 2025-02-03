@@ -17,7 +17,14 @@ class KeyManager {
 
     // 清理60秒前的请求记录
     const validTimestamps = timestamps.filter(ts => now - ts < 60000);
-
+    
+    // 直接使用传入的 activeKey
+    console.log(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      type: 'keyandtime',
+      validTimestamps,
+      currentKey
+    }, null, 2));
     // 如果最近一分钟内的请求达到10次，切换到下一个key
     if (validTimestamps.length >= 10) {
       this.currentKeyIndex = (this.currentKeyIndex + 1) % this.keys.length;
