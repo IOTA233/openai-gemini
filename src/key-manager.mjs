@@ -4,12 +4,17 @@ class KeyManager {
   constructor() {
     this.keys = [];
     this.currentKeyIndex = 0;
-    this.redis = new Redis(process.env.REDIS_URL);
+    console.log('REDIS_KV_URL:', process.env.REDIS_KV_URL);
+    this.redis = new Redis(process.env.REDIS_KV_URL);
   }
 
   initializeKeys(apiKeys) {
-    if (!apiKeys) return;
+    if (!apiKeys) {
+      console.log('No API keys provided');
+      return;
+    }
     this.keys = apiKeys.split(',').map(key => key.trim());
+    console.log('Initialized keys:', this.keys);
   }
 
   async getNextAvailableKey() {
