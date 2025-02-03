@@ -28,7 +28,7 @@ export default {
       keyManager.initializeKeys(apiKeys);
 
       // 只获取一次 API key
-      const activeKey = await keyManager.getNextAvailableKey();
+      const activeKey = keyManager.getNextAvailableKey();
       if (!activeKey) {
         throw new HttpError("Rate limit exceeded. Please try again later.", 429);
       }
