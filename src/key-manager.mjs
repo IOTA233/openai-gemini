@@ -1,8 +1,10 @@
+import { Redis } from 'ioredis';
+
 class KeyManager {
   constructor() {
     this.keys = [];
     this.currentKeyIndex = 0;
-    this.requestTimestamps = new Map(); // 只需要保留这一个计数器
+    this.redis = new Redis(process.env.REDIS_URL);
   }
 
   initializeKeys(apiKeys) {
@@ -10,42 +12,49 @@ class KeyManager {
     this.keys = apiKeys.split(',').map(key => key.trim());
   }
 
-  getNextAvailableKey() {
+  async getNextAvailableKey() {
     const currentKey = this.keys[this.currentKeyIndex];
     const now = Date.now();
+    const redisKey = `api-requests:${currentKey}`;
 
-    // 确保当前 key 在 Map 中有一个数组
-    if (!this.requestTimestamps.has(currentKey)) {
-      this.requestTimestamps.set(currentKey, []);
+    try {
+      // 使用 Redis 的 Sorted Set 存储时间戳
+      // 1. 清理60秒前的请求记录
+      await this.redis.zremrangebyscore(redisKey, '-inf', now - 60000);
+
+      // 2. 获取当前有效的请求记录
+      const validTimestamps = await this.redis.zrange(redisKey, 0, -1, 'WITHSCORES');
+
+      console.log(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        type: 'keyandtime',
+        validTimestamps: validTimestamps,
+        currentKey,
+        requestCount: validTimestamps.length / 2  // WITHSCORES 会返回成对的值
+      }, null, 2));
+
+      // 3. 检查是否需要切换到下一个 key
+      if (validTimestamps.length / 2 >= 10) {
+        this.currentKeyIndex = (this.currentKeyIndex + 1) % this.keys.length;
+        return this.getNextAvailableKey();
+      }
+
+      // 4. 添加新的请求记录
+      await this.redis.zadd(redisKey, now, now.toString());
+
+      return currentKey;
+    } catch (error) {
+      console.error('Redis 操作错误:', error);
+      // 发生错误时返回当前 key，避免服务中断
+      return currentKey;
     }
+  }
 
-    // 获取当前存储的时间戳
-    let timestamps = this.requestTimestamps.get(currentKey);
-
-    // 清理60秒前的请求记录并立即更新存储
-    timestamps = timestamps.filter(ts => now - ts < 60000);
-    this.requestTimestamps.set(currentKey, timestamps);
-
-    // 先记录新的请求时间戳，再进行判断
-    timestamps.push(now);
-
-    console.log(JSON.stringify({
-      timestamp: new Date().toISOString(),
-      type: 'keyandtime',
-      validTimestamps: timestamps,
-      currentKey,
-      requestCount: timestamps.length
-    }, null, 2));
-
-    // 如果最近一分钟内的请求达到10次，切换到下一个key
-    if (timestamps.length > 10) {
-      this.currentKeyIndex = (this.currentKeyIndex + 1) % this.keys.length;
-      // 移除刚才添加的时间戳，因为这个key已经超限了
-      timestamps.pop();
-      return this.getNextAvailableKey();
+  // 可选：添加清理方法
+  async cleanup() {
+    if (this.redis) {
+      await this.redis.quit();
     }
-
-    return currentKey;
   }
 }
 
