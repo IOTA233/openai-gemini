@@ -25,36 +25,18 @@ export class KeyManager {
   }
 
   async getNextAvailableKey() {
+    // 确保 keys 存在
+    if (!this.keys || this.keys.length === 0) {
+      console.error('No API keys available');
+      return null;
+    }
+
     const currentKey = this.keys[this.currentKeyIndex];
     const now = Date.now();
     const redisKey = `api-requests:${currentKey}`;
 
     try {
-      // 打印当前 Redis 中的原始数据
-      console.log('===== Redis 原始数据 =====');
-      const allData = await this.redis.zrange(redisKey, 0, -1, {
-        withScores: true
-      });
-      console.log('Redis key:', redisKey);
-      console.log('Raw data:', allData);
-
-      // 打印格式化后的数据
-      console.log('\n===== 格式化数据 =====');
-      const formattedData = allData.map(item => {
-        // 使用 score 作为时间戳，因为 member 可能不是有效的时间戳
-        const timestamp = item.score;
-        return {
-          timestamp: new Date(timestamp).toISOString(),
-          score: item.score,
-          age: `${Math.round((now - timestamp) / 1000)}秒前`
-        };
-      });
-
-      console.log(JSON.stringify(formattedData, null, 2));
-      console.log('总请求数:', allData.length);
-      console.log('========================\n');
-
-      // 原有的清理逻辑
+      // 1. 清理过期数据（60秒前的数据）
       await this.redis.zremrangebyscore(redisKey, '-inf', now - 60000);
 
       // 2. 获取当前有效的请求记录
@@ -62,42 +44,39 @@ export class KeyManager {
         withScores: true
       });
 
-      // 格式化时间戳以便更好地查看
-      const formattedTimestamps = validTimestamps.map(item => ({
-        timestamp: new Date(item.score).toISOString(),
-        score: item.score
-      }));
-
-      console.log(JSON.stringify({
-        timestamp: new Date().toISOString(),
-        type: 'keyandtime',
-        validTimestamps: formattedTimestamps,
-        currentKey,
-        requestCount: validTimestamps.length
-      }, null, 2));
-
       // 3. 检查是否需要切换到下一个 key
       if (validTimestamps.length >= 10) {
+        console.log(`Key ${currentKey} has reached limit, switching to next key`);
         this.currentKeyIndex = (this.currentKeyIndex + 1) % this.keys.length;
-        return this.getNextAvailableKey();
+        return this.getNextAvailableKey(); // 递归调用获取下一个可用的 key
       }
 
-      // 4. 添加新的请求记录
-      await this.redis.zadd(redisKey, { score: now, member: `req:${now}` });
+      // 4. 记录新的请求
+      const member = `req:${now}`;
+      await this.redis.zadd(redisKey, {
+        score: now,
+        member: member
+      });
+
+      // 5. 打印调试信息
+      console.log({
+        timestamp: new Date().toISOString(),
+        key: currentKey,
+        requestCount: validTimestamps.length + 1,
+        latestRequest: member
+      });
 
       return currentKey;
     } catch (error) {
       console.error('Redis 操作错误:', error);
-      // 发生错误时返回当前 key，避免服务中断
-      return currentKey;
+      return currentKey; // 发生错误时返回当前 key
     }
   }
 
-  // 可选：添加清理方法
+  // 添加清理方法
   async cleanup() {
-    if (this.redis) {
-      await this.redis.quit();
-    }
+    // Upstash Redis 客户端不需要显式关闭连接
+    console.log('Cleanup completed');
   }
 }
 
