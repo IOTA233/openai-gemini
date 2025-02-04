@@ -32,46 +32,77 @@ export class KeyManager {
       return null;
     }
 
-    const currentKey = this.keys[this.currentKeyIndex];
-    const now = Date.now();
-    const redisKey = `api-requests:${currentKey}`;
+    // 记录已检查的key数量
+    let checkedKeysCount = 0;
+    let earliestExpiry = Infinity;
+    const startIndex = this.currentKeyIndex;
 
-    try {
-      // 1. 清理过期数据（60秒前的数据）
-      await this.redis.zremrangebyscore(redisKey, '-inf', now - 60000);
+    while (checkedKeysCount < this.keys.length) {
+      const currentKey = this.keys[this.currentKeyIndex];
+      const now = Date.now();
+      const redisKey = `api-requests:${currentKey}`;
 
-      // 2. 获取当前有效的请求记录
-      const validTimestamps = await this.redis.zrange(redisKey, 0, -1, {
-        withScores: true
-      });
+      try {
+        // 1. 清理过期数据（60秒前的数据）
+        await this.redis.zremrangebyscore(redisKey, '-inf', now - 60000);
 
-      // 3. 检查是否需要切换到下一个 key
-      if (validTimestamps.length >= 10) {
-        console.log(`Key ${currentKey} has reached limit, switching to next key`);
+        // 2. 获取当前有效的请求记录
+        const validTimestamps = await this.redis.zrange(redisKey, 0, -1, {
+          withScores: true
+        });
+
+        // 3. 如果当前key未达到限制，直接使用
+        if (validTimestamps.length < 10) {
+          // 4. 记录新的请求
+          const member = `req:${now}`;
+          await this.redis.zadd(redisKey, {
+            score: now,
+            member: member
+          });
+
+          // 5. 打印调试信息
+          console.log({
+            timestamp: new Date().toISOString(),
+            key: currentKey,
+            requestCount: validTimestamps.length + 1,
+            latestRequest: member
+          });
+
+          return currentKey;
+        }
+
+        // 记录最早的过期时间
+        if (validTimestamps.length > 0) {
+          const oldestTimestamp = validTimestamps[0].score;
+          const expiryTime = oldestTimestamp + 60000;
+          earliestExpiry = Math.min(earliestExpiry, expiryTime);
+        }
+
+        // 移动到下一个key
         this.currentKeyIndex = (this.currentKeyIndex + 1) % this.keys.length;
-        return this.getNextAvailableKey(); // 递归调用获取下一个可用的 key
+        checkedKeysCount++;
+
+      } catch (error) {
+        console.error('Redis 操作错误:', error);
+        checkedKeysCount++;
+        this.currentKeyIndex = (this.currentKeyIndex + 1) % this.keys.length;
+        continue;
       }
-
-      // 4. 记录新的请求
-      const member = `req:${now}`;
-      await this.redis.zadd(redisKey, {
-        score: now,
-        member: member
-      });
-
-      // 5. 打印调试信息
-      console.log({
-        timestamp: new Date().toISOString(),
-        key: currentKey,
-        requestCount: validTimestamps.length + 1,
-        latestRequest: member
-      });
-
-      return currentKey;
-    } catch (error) {
-      console.error('Redis 操作错误:', error);
-      return currentKey; // 发生错误时返回当前 key
     }
+
+    // 如果所有key都检查完且都超限了
+    if (earliestExpiry !== Infinity) {
+      const waitTime = Math.max(0, earliestExpiry - Date.now());
+      console.log(`所有key都已达到限制，等待 ${Math.ceil(waitTime / 1000)} 秒后重试`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+
+      // 重置索引到起始位置
+      this.currentKeyIndex = startIndex;
+      return this.getNextAvailableKey();
+    }
+
+    console.error('所有key都不可用，且没有找到有效的过期时间');
+    return null;
   }
 
   // 添加清理方法
