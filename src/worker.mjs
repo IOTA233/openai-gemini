@@ -19,8 +19,9 @@ export default {
     try {
       // 获取请求信息
       const { pathname } = new URL(request.url);
+      console.log(request);
       const requestBody = request.method === "POST" ? await request.json() : null;
-
+      console.log(requestBody);
       const auth = request.headers.get("Authorization");
       let apiKeys = auth?.split(" ")[1];
 
