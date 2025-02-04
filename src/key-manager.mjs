@@ -1,11 +1,18 @@
-import { Redis } from 'ioredis';
+import { Redis } from '@upstash/redis'
 
-class KeyManager {
-  constructor() {
-    this.keys = [];
+export class KeyManager {
+  constructor(keys) {
+    this.keys = keys;
     this.currentKeyIndex = 0;
-    console.log('REDIS_KV_URL:', process.env.REDIS_KV_URL);
-    this.redis = new Redis(process.env.REDIS_KV_URL);
+
+    // 使用 @upstash/redis 替代 ioredis
+    this.redis = new Redis({
+      url: process.env.REDIS_KV_URL,
+      token: process.env.REDIS_KV_TOKEN,
+    })
+
+    // 不再需要事件监听器，因为 @upstash/redis 使用 REST API
+    console.log('Initialized Redis connection');
   }
 
   initializeKeys(apiKeys) {
