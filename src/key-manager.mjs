@@ -5,7 +5,10 @@ class KeyManager {
     this.keys = [];
     this.currentKeyIndex = 0;
     console.log('REDIS_KV_URL:', process.env.REDIS_KV_URL);
-    this.redis = new Redis(process.env.REDIS_KV_URL);
+    this.redis = new Redis({
+      url: 'https://cunning-gull-10062.upstash.io',
+      token: 'ASdOAAIjcDE3Yzk1NjY1MmRlM2I0Y2FhYmI4ZDNkZjkyODQ0MGVkNXAxMA',
+    })
   }
 
   initializeKeys(apiKeys) {
