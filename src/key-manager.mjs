@@ -33,12 +33,21 @@ class KeyManager {
       // 2. 获取当前有效的请求记录
       const validTimestamps = await this.redis.zrange(redisKey, 0, -1, 'WITHSCORES');
 
+      // 格式化时间戳以便更好地查看
+      const formattedTimestamps = [];
+      for (let i = 0; i < validTimestamps.length; i += 2) {
+        formattedTimestamps.push({
+          timestamp: new Date(parseInt(validTimestamps[i])).toISOString(),
+          score: parseInt(validTimestamps[i + 1])
+        });
+      }
+
       console.log(JSON.stringify({
         timestamp: new Date().toISOString(),
         type: 'keyandtime',
-        validTimestamps: validTimestamps,
+        validTimestamps: formattedTimestamps,
         currentKey,
-        requestCount: validTimestamps.length / 2  // WITHSCORES 会返回成对的值
+        requestCount: validTimestamps.length / 2
       }, null, 2));
 
       // 3. 检查是否需要切换到下一个 key
