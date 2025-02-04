@@ -7,8 +7,8 @@ export class KeyManager {
 
     // 使用 @upstash/redis 替代 ioredis
     this.redis = new Redis({
-      url: process.env.REDIS_KV_URL,
-      token: process.env.REDIS_KV_TOKEN,
+      url: 'https://cunning-gull-10062.upstash.io',
+      token: 'ASdOAAIjcDE3Yzk1NjY1MmRlM2I0Y2FhYmI4ZDNkZjkyODQ0MGVkNXAxMA',
     })
 
     // 不再需要事件监听器，因为 @upstash/redis 使用 REST API
