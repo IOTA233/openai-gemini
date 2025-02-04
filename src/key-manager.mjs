@@ -25,6 +25,7 @@ export class KeyManager {
   }
 
   async getNextAvailableKey() {
+    console.log('getNextAvailableKey');
     // 确保 keys 存在
     if (!this.keys || this.keys.length === 0) {
       console.error('No API keys available');
