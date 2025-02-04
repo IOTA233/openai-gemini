@@ -5,10 +5,7 @@ class KeyManager {
     this.keys = [];
     this.currentKeyIndex = 0;
     console.log('REDIS_KV_URL:', process.env.REDIS_KV_URL);
-    this.redis = new Redis({
-      url: 'https://cunning-gull-10062.upstash.io',
-      token: 'ASdOAAIjcDE3Yzk1NjY1MmRlM2I0Y2FhYmI4ZDNkZjkyODQ0MGVkNXAxMA',
-    })
+    this.redis = new Redis(process.env.REDIS_KV_URL);
   }
 
   initializeKeys(apiKeys) {
@@ -26,8 +23,27 @@ class KeyManager {
     const redisKey = `api-requests:${currentKey}`;
 
     try {
-      // 使用 Redis 的 Sorted Set 存储时间戳
-      // 1. 清理60秒前的请求记录
+      // 打印当前 Redis 中的原始数据
+      console.log('===== Redis 原始数据 =====');
+      const allData = await this.redis.zrange(redisKey, 0, -1, 'WITHSCORES');
+      console.log('Redis key:', redisKey);
+      console.log('Raw data:', allData);
+
+      // 打印格式化后的数据
+      console.log('\n===== 格式化数据 =====');
+      const formattedData = [];
+      for (let i = 0; i < allData.length; i += 2) {
+        formattedData.push({
+          timestamp: new Date(parseInt(allData[i])).toISOString(),
+          score: parseInt(allData[i + 1]),
+          age: `${Math.round((now - parseInt(allData[i])) / 1000)}秒前`
+        });
+      }
+      console.log(JSON.stringify(formattedData, null, 2));
+      console.log('总请求数:', allData.length / 2);
+      console.log('========================\n');
+
+      // 原有的清理逻辑
       await this.redis.zremrangebyscore(redisKey, '-inf', now - 60000);
 
       // 2. 获取当前有效的请求记录
