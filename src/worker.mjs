@@ -29,6 +29,7 @@ export default {
 
       // 只获取一次 API key
       const activeKey = keyManager.getNextAvailableKey();
+      console.log("activeKey", activeKey);
       if (!activeKey) {
         throw new HttpError("Rate limit exceeded. Please try again later.", 429);
       }
@@ -184,15 +185,6 @@ async function handleCompletions(req, activeKey) {
     if (req.stream) { url += "?alt=sse"; }
 
     const requestBody = await transformRequest(req);
-
-    // 直接使用传入的 activeKey
-    console.log(JSON.stringify({
-      timestamp: new Date().toISOString(),
-      type: 'outgoing_request',
-      url: url,
-      headers: makeHeaders(activeKey, { "Content-Type": "application/json" }),
-      body: requestBody
-    }, null, 2));
 
     const response = await fetch(url, {
       method: "POST",
