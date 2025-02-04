@@ -32,7 +32,6 @@ export class KeyManager {
     try {
       // 打印当前 Redis 中的原始数据
       console.log('===== Redis 原始数据 =====');
-      // 修改 zrange 的调用方式
       const allData = await this.redis.zrange(redisKey, 0, -1, {
         withScores: true
       });
@@ -41,11 +40,15 @@ export class KeyManager {
 
       // 打印格式化后的数据
       console.log('\n===== 格式化数据 =====');
-      const formattedData = allData.map(item => ({
-        timestamp: new Date(parseInt(item.value)).toISOString(),
-        score: item.score,
-        age: `${Math.round((now - parseInt(item.value)) / 1000)}秒前`
-      }));
+      const formattedData = allData.map(item => {
+        // 使用 score 作为时间戳，因为 member 可能不是有效的时间戳
+        const timestamp = item.score;
+        return {
+          timestamp: new Date(timestamp).toISOString(),
+          score: item.score,
+          age: `${Math.round((now - timestamp) / 1000)}秒前`
+        };
+      });
 
       console.log(JSON.stringify(formattedData, null, 2));
       console.log('总请求数:', allData.length);
@@ -61,7 +64,7 @@ export class KeyManager {
 
       // 格式化时间戳以便更好地查看
       const formattedTimestamps = validTimestamps.map(item => ({
-        timestamp: new Date(parseInt(item.value)).toISOString(),
+        timestamp: new Date(item.score).toISOString(),
         score: item.score
       }));
 
@@ -80,7 +83,7 @@ export class KeyManager {
       }
 
       // 4. 添加新的请求记录
-      await this.redis.zadd(redisKey, { score: now, member: now.toString() });
+      await this.redis.zadd(redisKey, { score: now, member: `req:${now}` });
 
       return currentKey;
     } catch (error) {
