@@ -186,6 +186,8 @@ async function handleCompletions(req, activeKey) {
 
     const requestBody = await transformRequest(req);
 
+    console.log('Request body:', JSON.stringify(requestBody, null, 2));
+
     const response = await fetch(url, {
       method: "POST",
       headers: makeHeaders(activeKey, { "Content-Type": "application/json" }),
