@@ -73,7 +73,7 @@ export class KeyManager {
 
         // 记录最早的过期时间
         if (validTimestamps.length > 0) {
-          const oldestTimestamp = validTimestamps[0].score;
+          const oldestTimestamp = parseInt(validTimestamps[0][1]);
           const expiryTime = oldestTimestamp + 60000;
           earliestExpiry = Math.min(earliestExpiry, expiryTime);
         }
@@ -92,10 +92,10 @@ export class KeyManager {
 
     // 如果所有key都检查完且都超限了
     if (earliestExpiry !== Infinity) {
-      const waitTime = Math.max(0, earliestExpiry - Date.now());
-      console.log(earliestExpiry);
-      console.log(Date.now());
+      const now = Date.now();
+      const waitTime = Math.max(0, earliestExpiry - now);
       console.log(`所有key都已达到限制，等待 ${Math.ceil(waitTime / 1000)} 秒后重试`);
+      console.log('调试信息:', { earliestExpiry, now, waitTime });
       await new Promise(resolve => setTimeout(resolve, waitTime));
 
       // 重置索引到起始位置
