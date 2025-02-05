@@ -43,37 +43,41 @@ export class KeyManager {
       const redisKey = `api-requests:${currentKey}`;
 
       try {
-        // 1. 清理过期数据（60秒前的数据）
-        await this.redis.zremrangebyscore(redisKey, '-inf', now - 60000);
-
-        // 2. 获取当前有效的请求记录
+        // 1. 获取当前有效的请求记录（不需要提前清理）
         const validTimestamps = await this.redis.zrange(redisKey, 0, -1, {
           withScores: true
         });
 
-        // 3. 如果当前key未达到限制，直接使用
-        if (validTimestamps.length < 10) {
-          // 4. 记录新的请求
+        // 2. 过滤出60秒内的请求
+        const recentRequests = validTimestamps.filter(([_, timestamp]) => {
+          return now - parseInt(timestamp) < 60000;
+        });
+
+        // 3. 如果60秒内的请求少于10个，可以使用当前key
+        if (recentRequests.length < 10) {
+          // 清理旧数据
+          await this.redis.zremrangebyscore(redisKey, '-inf', now - 60000);
+
+          // 记录新的请求
           const member = `req:${now}`;
           await this.redis.zadd(redisKey, {
             score: now,
             member: member
           });
 
-          // 5. 打印调试信息
           console.log({
             timestamp: new Date().toISOString(),
             key: currentKey,
-            requestCount: validTimestamps.length + 1,
+            requestCount: recentRequests.length + 1,
             latestRequest: member
           });
 
           return currentKey;
         }
 
-        // 记录最早的过期时间
-        if (validTimestamps.length > 0) {
-          const oldestTimestamp = parseInt(validTimestamps[0][1]);
+        // 计算最早请求的过期时间
+        if (recentRequests.length > 0) {
+          const oldestTimestamp = parseInt(recentRequests[0][1]);
           const expiryTime = oldestTimestamp + 60000;
           earliestExpiry = Math.min(earliestExpiry, expiryTime);
         }
