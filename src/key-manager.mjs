@@ -26,74 +26,58 @@ export class KeyManager {
 
   async getNextAvailableKey() {
     console.log('getNextAvailableKey');
-    // 确保 keys 存在
     if (!this.keys || this.keys.length === 0) {
       console.error('No API keys available');
       return null;
     }
 
-    // 记录已检查的key数量
+    const now = Date.now();
     let checkedKeysCount = 0;
     let earliestExpiry = Infinity;
     const startIndex = this.currentKeyIndex;
 
     while (checkedKeysCount < this.keys.length) {
       const currentKey = this.keys[this.currentKeyIndex];
-      const now = Date.now();
       const redisKey = `api-requests:${currentKey}`;
 
       try {
-        // 获取当前有效的请求记录
-        const validTimestamps = await this.redis.zrange(redisKey, 0, -1, 'WITHSCORES');
+        // 首先清理过期数据
+        await this.redis.zremrangebyscore(redisKey, '-inf', now - 60000);
 
-        // 将返回的扁平数组转换为键值对数组
+        // 获取清理后的有效请求记录
+        const validTimestamps = await this.redis.zrange(redisKey, 0, -1, 'WITHSCORES');
         const recentRequests = [];
         for (let i = 0; i < validTimestamps.length; i += 2) {
-          const member = validTimestamps[i];
-          const score = parseInt(validTimestamps[i + 1]);
-          if (now - score < 60000) {
-            recentRequests.push([member, score]);
-          }
+          recentRequests.push([validTimestamps[i], parseInt(validTimestamps[i + 1])]);
         }
 
-        // 如果60秒内的请求少于10个，可以使用当前key
+        // 如果60秒内的请求少于10个，使用当前key
         if (recentRequests.length < 10) {
-          // 清理旧数据
-          await this.redis.zremrangebyscore(redisKey, '-inf', now - 60000);
-
-          // 记录新的请求
           const member = `req:${now}`;
           await this.redis.zadd(redisKey, {
             score: now,
             member: member
           });
 
-          console.log({
-            timestamp: new Date().toISOString(),
-            key: currentKey,
-            requestCount: recentRequests.length + 1,
-            latestRequest: member
-          });
-
+          console.log(`使用 API key: ${currentKey.substring(0, 8)}...，当前请求数: ${recentRequests.length + 1}`);
           return currentKey;
         }
 
-        // 计算最早请求的过期时间
+        // 计算当前key的最早可用时间
         if (recentRequests.length > 0) {
-          const oldestTimestamp = recentRequests[0][1];  // 已经是数字了，不需要 parseInt
+          const oldestTimestamp = recentRequests[0][1];
           const expiryTime = oldestTimestamp + 60000;
           earliestExpiry = Math.min(earliestExpiry, expiryTime);
         }
 
-        // 移动到下一个key
+        // 尝试下一个key
         this.currentKeyIndex = (this.currentKeyIndex + 1) % this.keys.length;
         checkedKeysCount++;
 
       } catch (error) {
-        console.error('Redis 操作错误:', error);
-        checkedKeysCount++;
+        console.error(`Redis 操作错误 (key: ${currentKey}):`, error);
         this.currentKeyIndex = (this.currentKeyIndex + 1) % this.keys.length;
-        continue;
+        checkedKeysCount++;
       }
     }
 
