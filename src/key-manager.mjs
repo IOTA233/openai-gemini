@@ -93,6 +93,8 @@ export class KeyManager {
     // 如果所有key都检查完且都超限了
     if (earliestExpiry !== Infinity) {
       const waitTime = Math.max(0, earliestExpiry - Date.now());
+      console.log(earliestExpiry);
+      console.log(Date.now());
       console.log(`所有key都已达到限制，等待 ${Math.ceil(waitTime / 1000)} 秒后重试`);
       await new Promise(resolve => setTimeout(resolve, waitTime));
 
