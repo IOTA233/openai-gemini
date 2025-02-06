@@ -41,11 +41,21 @@ export class KeyManager {
       const redisKey = `api-requests:${currentKey}`;
 
       try {
-        // 首先清理过期数据
-        await this.redis.zremrangebyscore(redisKey, '-inf', now - 60000);
+        // 添加调试日志
+        console.log(`检查 key: ${currentKey.substring(0, 8)}...`);
+
+        // 获取清理前的数据量
+        const beforeCount = await this.redis.zcard(redisKey);
+        console.log(`清理前的请求数: ${beforeCount}`);
+
+        // 清理过期数据
+        const removedCount = await this.redis.zremrangebyscore(redisKey, '-inf', now - 60000);
+        console.log(`已清理 ${removedCount} 条过期数据`);
 
         // 获取清理后的有效请求记录
         const validTimestamps = await this.redis.zrange(redisKey, 0, -1, 'WITHSCORES');
+        console.log(`当前有效请求数: ${validTimestamps.length / 2}`);
+
         const recentRequests = [];
         for (let i = 0; i < validTimestamps.length; i += 2) {
           recentRequests.push([validTimestamps[i], parseInt(validTimestamps[i + 1])]);
@@ -75,7 +85,7 @@ export class KeyManager {
         checkedKeysCount++;
 
       } catch (error) {
-        console.error(`Redis 操作错误 (key: ${currentKey}):`, error);
+        console.error(`Redis 操作详细错误:`, error);
         this.currentKeyIndex = (this.currentKeyIndex + 1) % this.keys.length;
         checkedKeysCount++;
       }
