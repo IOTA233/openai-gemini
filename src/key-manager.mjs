@@ -48,35 +48,35 @@ export class KeyManager {
         const beforeCount = await this.redis.zcard(redisKey);
         console.log(`清理前的请求数: ${beforeCount}`);
 
-        // 清理过期数据
-        const removedCount = await this.redis.zremrangebyscore(redisKey, '-inf', now - 60000);
+        // 清理过期数据（使用当前时间戳减去60秒）
+        const cutoffTime = now - 60000;
+        const removedCount = await this.redis.zremrangebyscore(redisKey, '-inf', cutoffTime);
         console.log(`已清理 ${removedCount} 条过期数据`);
 
         // 获取清理后的有效请求记录
-        const validTimestamps = await this.redis.zrange(redisKey, 0, -1, 'WITHSCORES');
-        console.log(`当前有效请求数: ${validTimestamps.length / 2}`);
+        const validRequests = await this.redis.zrange(redisKey, 0, -1, {
+          withScores: true
+        });
 
-        const recentRequests = [];
-        for (let i = 0; i < validTimestamps.length; i += 2) {
-          recentRequests.push([validTimestamps[i], parseInt(validTimestamps[i + 1])]);
-        }
+        console.log(`当前有效请求数: ${validRequests.length}`);
 
         // 如果60秒内的请求少于10个，使用当前key
-        if (recentRequests.length < 10) {
+        if (validRequests.length < 10) {
           const member = `req:${now}`;
           await this.redis.zadd(redisKey, {
             score: now,
             member: member
           });
 
-          console.log(`使用 API key: ${currentKey.substring(0, 8)}...，当前请求数: ${recentRequests.length + 1}`);
+          console.log(`使用 API key: ${currentKey.substring(0, 8)}...，当前请求数: ${validRequests.length + 1}`);
           return currentKey;
         }
 
         // 计算当前key的最早可用时间
-        if (recentRequests.length > 0) {
-          const oldestTimestamp = recentRequests[0][1];
-          const expiryTime = oldestTimestamp + 60000;
+        if (validRequests.length > 0) {
+          // validRequests 中的每个元素都是 { value: member, score: timestamp } 格式
+          const oldestRequest = validRequests[0];
+          const expiryTime = parseInt(oldestRequest.score) + 60000;
           earliestExpiry = Math.min(earliestExpiry, expiryTime);
         }
 
