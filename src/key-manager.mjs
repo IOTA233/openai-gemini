@@ -10,9 +10,6 @@ export class KeyManager {
       url: 'https://cunning-gull-10062.upstash.io',
       token: 'ASdOAAIjcDE3Yzk1NjY1MmRlM2I0Y2FhYmI4ZDNkZjkyODQ0MGVkNXAxMA',
     })
-
-    // 不再需要事件监听器，因为 @upstash/redis 使用 REST API
-    console.log('Initialized Redis connection');
   }
 
   initializeKeys(apiKeys) {
@@ -25,7 +22,6 @@ export class KeyManager {
   }
 
   async getNextAvailableKey() {
-    console.log('getNextAvailableKey');
     if (!this.keys || this.keys.length === 0) {
       console.error('No API keys available');
       return null;
@@ -41,13 +37,6 @@ export class KeyManager {
       const redisKey = `api-requests:${currentKey}`;
 
       try {
-        // 添加调试日志
-        console.log(`检查 key: ${currentKey.substring(0, 8)}...`);
-
-        // 获取清理前的数据量
-        const beforeCount = await this.redis.zcard(redisKey);
-        console.log(`清理前的请求数: ${beforeCount}`);
-
         // 清理过期数据（使用当前时间戳减去60秒）
         const cutoffTime = now - 60000;
         const removedCount = await this.redis.zremrangebyscore(redisKey, '-inf', cutoffTime);
@@ -58,8 +47,6 @@ export class KeyManager {
           withScores: true
         });
 
-        console.log(`当前有效请求数: ${validRequests.length}`);
-
         // 如果60秒内的请求少于10个，使用当前key
         if (validRequests.length < 10) {
           const member = `req:${now}`;
@@ -68,7 +55,7 @@ export class KeyManager {
             member: member
           });
 
-          console.log(`使用 API key: ${currentKey.substring(0, 8)}...，当前请求数: ${validRequests.length + 1}`);
+          console.log(`使用 API key: ${currentKey}...，当前请求数: ${validRequests.length + 1}`);
           return currentKey;
         }
 

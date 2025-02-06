@@ -19,9 +19,7 @@ export default {
     try {
       // 获取请求信息
       const { pathname } = new URL(request.url);
-      console.log(request);
       const requestBody = request.method === "POST" ? await request.json() : null;
-      console.log(requestBody);
       const auth = request.headers.get("Authorization");
       let apiKeys = auth?.split(" ")[1];
 
@@ -30,7 +28,6 @@ export default {
 
       // 只获取一次 API key
       const activeKey = await keyManager.getNextAvailableKey();
-      console.log("activeKey", activeKey);
       if (!activeKey) {
         throw new HttpError("Rate limit exceeded. Please try again later.", 429);
       }
@@ -187,22 +184,11 @@ async function handleCompletions(req, activeKey) {
 
     const requestBody = await transformRequest(req);
 
-    console.log('Request body:', JSON.stringify(requestBody, null, 2));
-
     const response = await fetch(url, {
       method: "POST",
       headers: makeHeaders(activeKey, { "Content-Type": "application/json" }),
       body: JSON.stringify(requestBody),
     });
-
-    // 记录API响应状态
-    console.log(JSON.stringify({
-      timestamp: new Date().toISOString(),
-      type: 'api_response',
-      status: response.status,
-      statusText: response.statusText,
-      headers: Object.fromEntries(response.headers)
-    }));
 
     let body = response.body;
     if (response.ok) {
@@ -374,7 +360,6 @@ const transformMessages = async (messages) => {
   if (system_instruction && contents.length === 0) {
     contents.push({ role: "model", parts: { text: " " } });
   }
-  //console.info(JSON.stringify(contents, 2));
   return { system_instruction, contents };
 };
 
