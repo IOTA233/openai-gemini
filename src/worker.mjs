@@ -189,7 +189,7 @@ async function handleCompletions(req, activeKey) {
       headers: makeHeaders(activeKey, { "Content-Type": "application/json" }),
       body: JSON.stringify(requestBody),
     });
-
+    console.log('response', response);
     let body = response.body;
     if (response.ok) {
       let id = generateChatcmplId();
