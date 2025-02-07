@@ -54,9 +54,8 @@ export class KeyManager {
 
         const result = await this.redis.eval(
           luaScript,
-          1,
-          redisKey,
-          now.toString()
+          [redisKey],
+          [now.toString()]
         );
 
         if (result === 1) {
