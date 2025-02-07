@@ -183,7 +183,7 @@ async function handleCompletions(req, activeKey) {
     if (req.stream) { url += "?alt=sse"; }
 
     const requestBody = await transformRequest(req);
-
+    console.log('requestBody', requestBody);
     const response = await fetch(url, {
       method: "POST",
       headers: makeHeaders(activeKey, { "Content-Type": "application/json" }),

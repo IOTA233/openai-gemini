@@ -13,7 +13,6 @@ export class KeyManager {
   }
 
   async getNextAvailableKey() {
-    console.log('getNextAvailableKey');
     if (!this.keys || this.keys.length === 0) {
       console.error('No API keys available');
       return null;
@@ -59,7 +58,7 @@ export class KeyManager {
         );
 
         if (result === 1) {
-          console.log(`使用 key: ${currentKey.substring(0, 8)}...`);
+          console.log(`使用 key: ${currentKey.substring(0, 12)}...`);
           return currentKey;
         }
 
