@@ -1,4 +1,8 @@
-import { Redis } from '@upstash/redis'
+import Redis from 'ioredis';
+
+const redis = new Redis({
+  url: 'redis://:1111122222@8.218.149.46:6379'
+});
 
 export class KeyManager {
   constructor(keys) {
@@ -6,10 +10,11 @@ export class KeyManager {
     this.currentKeyIndex = 0;
 
     // 使用 Redis 作为唯一的计数存储
-    this.redis = new Redis({
-      url: 'https://cunning-gull-10062.upstash.io',
-      token: 'ASdOAAIjcDE3Yzk1NjY1MmRlM2I0Y2FhYmI4ZDNkZjkyODQ0MGVkNXAxMA',
-    });
+    // this.redis = new Redis({
+    //   url: 'https://cunning-gull-10062.upstash.io',
+    //   token: 'ASdOAAIjcDE3Yzk1NjY1MmRlM2I0Y2FhYmI4ZDNkZjkyODQ0MGVkNXAxMA',
+    // });
+    this.redis = redis;
   }
 
   async getNextAvailableKey() {

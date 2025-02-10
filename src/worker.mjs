@@ -1,6 +1,5 @@
 import { Buffer } from "node:buffer";
 import keyManager from './key-manager.mjs';
-
 export default {
   async fetch(request) {
     if (request.method === "OPTIONS") {
@@ -189,7 +188,6 @@ async function handleCompletions(req, activeKey) {
       headers: makeHeaders(activeKey, { "Content-Type": "application/json" }),
       body: JSON.stringify(requestBody),
     });
-    console.log('response', response);
     let body = response.body;
     if (response.ok) {
       let id = generateChatcmplId();
