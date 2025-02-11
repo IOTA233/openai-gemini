@@ -1,12 +1,21 @@
-import { Redis } from '@upstash/redis'
+import { Redis } from 'ioredis'
 
 const redis = new Redis({
-  url: 'https://redis.ivresse.de',
-  token: '1111122222',
-  retry: {
-    retries: 3,
-    backoff: (retryCount) => Math.min(retryCount * 100, 3000)
+  host: '8.218.149.46',
+  port: 6379,
+  password: '1111122222',
+  retryStrategy(times) {
+    const delay = Math.min(times * 100, 3000);
+    return delay;
   }
+});
+
+redis.on('error', (err) => {
+  console.error('Redis 连接错误:', err);
+});
+
+redis.on('connect', () => {
+  console.log('Redis 连接成功');
 });
 
 export class KeyManager {
