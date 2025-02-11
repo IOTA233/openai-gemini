@@ -1,9 +1,15 @@
-import { kv } from '@vercel/kv'
+import { Redis } from '@upstash/redis'
 
 export class KeyManager {
   constructor(keys) {
     this.keys = keys;
     this.currentKeyIndex = 0;
+
+    // 使用 Redis 作为唯一的计数存储
+    this.redis = new Redis({
+      url: 'https://cunning-gull-10062.upstash.io',
+      token: 'ASdOAAIjcDE3Yzk1NjY1MmRlM2I0Y2FhYmI4ZDNkZjkyODQ0MGVkNXAxMA',
+    });
   }
 
   async getNextAvailableKey() {
@@ -20,25 +26,38 @@ export class KeyManager {
       const redisKey = `api-requests:${currentKey}`;
 
       try {
-        // 清理过期数据并获取当前请求数
-        const requests = await kv.zrange(redisKey, 0, -1, { withScores: true });
-        const cutoff = now - 60000;
+        // 使用 Redis 的原子操作来处理计数
+        // 1. 移除过期的请求
+        // 2. 添加新请求
+        // 3. 获取当前有效请求数
+        // 使用 Lua 脚本确保操作的原子性
+        const luaScript = `
+          local key = KEYS[1]
+          local now = tonumber(ARGV[1])
+          local cutoff = now - 60000
+          
+          -- 清理过期数据
+          redis.call('ZREMRANGEBYSCORE', key, '-inf', cutoff)
+          
+          -- 获取当前请求数
+          local count = redis.call('ZCARD', key)
+          
+          -- 如果请求数小于10，添加新请求
+          if count < 10 then
+            redis.call('ZADD', key, now, 'req:' .. now)
+            return 1
+          end
+          
+          return 0
+        `;
 
-        // 过滤出未过期的请求
-        const validRequests = requests.filter(([_, timestamp]) => timestamp > cutoff);
+        const result = await this.redis.eval(
+          luaScript,
+          [redisKey],
+          [now.toString()]
+        );
 
-        if (validRequests.length < 10) {
-          // 清除所有旧数据
-          await kv.del(redisKey);
-
-          // 添加所有有效请求
-          if (validRequests.length > 0) {
-            await kv.zadd(redisKey, ...validRequests.flat());
-          }
-
-          // 添加新请求
-          await kv.zadd(redisKey, { [`req:${now}`]: now });
-
+        if (result === 1) {
           console.log(`使用 key: ${currentKey.substring(0, 12)}...`);
           return currentKey;
         }
@@ -48,7 +67,13 @@ export class KeyManager {
         checkedKeysCount++;
 
       } catch (error) {
-        console.error(`Vercel KV 操作错误: `, error);
+        console.error(`Redis 操作错误: `, error);
+
+        if (error.message?.includes('max daily request limit exceeded')) {
+          console.error('已达到 Redis 每日请求限制');
+          return null;
+        }
+
         this.currentKeyIndex = (this.currentKeyIndex + 1) % this.keys.length;
         checkedKeysCount++;
       }
