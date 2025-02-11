@@ -1,15 +1,19 @@
 import { Redis } from '@upstash/redis'
 
+const redis = new Redis({
+  url: 'https://redis.ivresse.de',
+  token: '1111122222',
+  retry: {
+    retries: 3,
+    backoff: (retryCount) => Math.min(retryCount * 100, 3000)
+  }
+});
+
 export class KeyManager {
   constructor(keys) {
     this.keys = keys;
     this.currentKeyIndex = 0;
-
-    // 使用 Redis 作为唯一的计数存储
-    this.redis = new Redis({
-      url: 'https://cunning-gull-10062.upstash.io',
-      token: 'ASdOAAIjcDE3Yzk1NjY1MmRlM2I0Y2FhYmI4ZDNkZjkyODQ0MGVkNXAxMA',
-    });
+    this.redis = redis;
   }
 
   async getNextAvailableKey() {
