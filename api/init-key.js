@@ -1,6 +1,5 @@
-import { KeyManager } from '../src/key-manager.mjs';
-
-const keyManager = new KeyManager();
+let KeyManager;
+let keyManager;
 
 export default async function handler(req, res) {
   console.log('收到初始化请求');
@@ -11,6 +10,12 @@ export default async function handler(req, res) {
   }
 
   try {
+    if (!KeyManager) {
+      const module = await import('../src/key-manager.mjs');
+      KeyManager = module.KeyManager;
+      keyManager = new KeyManager();
+    }
+
     const { password, apiKey } = req.body;
     console.log('请求参数:', { password: password ? '已提供' : '未提供', apiKey: apiKey ? '已提供' : '未提供' });
 
