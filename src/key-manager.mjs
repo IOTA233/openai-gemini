@@ -163,13 +163,25 @@ export class KeyManager {
       const decryptedKeys = await Promise.all(
         encryptedKeys.map(async (encryptedKey, index) => {
           console.log(`正在解密第 ${index + 1} 个 key`);
-          return await this.decrypt(encryptedKey);
+          try {
+            return await this.decrypt(encryptedKey);
+          } catch (error) {
+            console.error(`解密第 ${index + 1} 个 key 时出错:`, error);
+            return null;
+          }
         })
       );
 
+      // 过滤掉解密失败的 key
+      const validKeys = decryptedKeys.filter(key => key !== null);
+
+      if (validKeys.length === 0) {
+        throw new Error('No valid API keys found after decryption');
+      }
+
       console.log('所有 key 解密完成');
       // 返回解密后的 key
-      return decryptedKeys.join(',');
+      return validKeys.join(',');
     } catch (error) {
       console.error('验证 key 时发生错误:', error);
       console.error('错误堆栈:', error.stack);
