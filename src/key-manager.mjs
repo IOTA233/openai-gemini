@@ -1,11 +1,11 @@
 import { Redis } from '@upstash/redis'
-import crypto from 'crypto'
 
 export class KeyManager {
   constructor(keys) {
     this.keys = keys;
     this.currentKeyIndex = 0;
     this.encryptionKey = process.env.ENCRYPTION_KEY || 'default-encryption-key';
+    this.algorithm = { name: 'AES-GCM', length: 256 };
 
     // 使用 Redis 作为唯一的计数存储
     this.redis = new Redis({
@@ -15,23 +15,90 @@ export class KeyManager {
   }
 
   // 加密函数
-  encrypt(text) {
-    const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(this.encryptionKey), iv);
-    let encrypted = cipher.update(text);
-    encrypted = Buffer.concat([encrypted, cipher.final()]);
-    return iv.toString('hex') + ':' + encrypted.toString('hex');
+  async encrypt(text) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(text);
+    const keyMaterial = await crypto.subtle.importKey(
+      'raw',
+      encoder.encode(this.encryptionKey),
+      'PBKDF2',
+      false,
+      ['deriveBits', 'deriveKey']
+    );
+
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const key = await crypto.subtle.deriveKey(
+      {
+        name: 'PBKDF2',
+        salt,
+        iterations: 100000,
+        hash: 'SHA-256'
+      },
+      keyMaterial,
+      this.algorithm,
+      false,
+      ['encrypt']
+    );
+
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const encryptedContent = await crypto.subtle.encrypt(
+      {
+        name: 'AES-GCM',
+        iv
+      },
+      key,
+      data
+    );
+
+    const encryptedArray = new Uint8Array(encryptedContent);
+    const result = new Uint8Array(salt.length + iv.length + encryptedArray.length);
+    result.set(salt);
+    result.set(iv, salt.length);
+    result.set(encryptedArray, salt.length + iv.length);
+
+    return btoa(String.fromCharCode(...result));
   }
 
   // 解密函数
-  decrypt(text) {
-    const textParts = text.split(':');
-    const iv = Buffer.from(textParts.shift(), 'hex');
-    const encryptedText = Buffer.from(textParts.join(':'), 'hex');
-    const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(this.encryptionKey), iv);
-    let decrypted = decipher.update(encryptedText);
-    decrypted = Buffer.concat([decrypted, decipher.final()]);
-    return decrypted.toString();
+  async decrypt(encryptedText) {
+    const decoder = new TextDecoder();
+    const encryptedData = Uint8Array.from(atob(encryptedText), c => c.charCodeAt(0));
+
+    const salt = encryptedData.slice(0, 16);
+    const iv = encryptedData.slice(16, 28);
+    const data = encryptedData.slice(28);
+
+    const keyMaterial = await crypto.subtle.importKey(
+      'raw',
+      new TextEncoder().encode(this.encryptionKey),
+      'PBKDF2',
+      false,
+      ['deriveBits', 'deriveKey']
+    );
+
+    const key = await crypto.subtle.deriveKey(
+      {
+        name: 'PBKDF2',
+        salt,
+        iterations: 100000,
+        hash: 'SHA-256'
+      },
+      keyMaterial,
+      this.algorithm,
+      false,
+      ['decrypt']
+    );
+
+    const decryptedContent = await crypto.subtle.decrypt(
+      {
+        name: 'AES-GCM',
+        iv
+      },
+      key,
+      data
+    );
+
+    return decoder.decode(decryptedContent);
   }
 
   // 验证密码并获取 API key
@@ -48,7 +115,7 @@ export class KeyManager {
       }
 
       // 解密 API key
-      const decryptedKey = this.decrypt(encryptedKey);
+      const decryptedKey = await this.decrypt(encryptedKey);
       this.initializeKeys(decryptedKey);
       return true;
     } catch (error) {
@@ -60,7 +127,7 @@ export class KeyManager {
   // 存储加密的 API key
   async storeEncryptedKey(apiKey) {
     try {
-      const encryptedKey = this.encrypt(apiKey);
+      const encryptedKey = await this.encrypt(apiKey);
       await this.redis.set('encrypted_api_key', encryptedKey);
       return true;
     } catch (error) {
