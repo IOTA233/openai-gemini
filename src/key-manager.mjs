@@ -168,17 +168,31 @@ export class KeyManager {
         throw new Error('No API key found');
       }
 
-      // 确保 encryptedKeysStr 是有效的 JSON 字符串
+      // 处理 Redis 返回的数据
       let encryptedKeys;
       try {
-        console.log('尝试解析 JSON 字符串');
+        // 尝试解析 JSON 字符串
         encryptedKeys = JSON.parse(encryptedKeysStr);
         console.log('JSON 解析成功，解析结果:', encryptedKeys);
       } catch (e) {
         console.error('解析加密 key 时出错:', e);
-        console.log('尝试作为单个 key 处理');
-        // 如果不是 JSON 格式，可能是单个 key
-        encryptedKeys = [encryptedKeysStr];
+        // 如果解析失败，可能是 Redis 返回的字符串格式不正确
+        // 尝试手动处理字符串
+        try {
+          // 移除可能的方括号和引号
+          const cleanedStr = encryptedKeysStr.replace(/[\[\]"]/g, '');
+          // 按逗号分割并过滤空值
+          encryptedKeys = cleanedStr.split(',').filter(key => key.trim());
+          console.log('手动处理后的 key 数组:', encryptedKeys);
+        } catch (parseError) {
+          console.error('手动处理 key 时出错:', parseError);
+          // 如果还是失败，将整个字符串作为单个 key
+          encryptedKeys = [encryptedKeysStr];
+        }
+      }
+
+      if (!Array.isArray(encryptedKeys)) {
+        encryptedKeys = [encryptedKeys];
       }
 
       console.log(`找到 ${encryptedKeys.length} 个加密的 API key`);
@@ -187,6 +201,10 @@ export class KeyManager {
       const decryptedKeys = await Promise.all(
         encryptedKeys.map(async (encryptedKey, index) => {
           console.log(`正在解密第 ${index + 1} 个 key`);
+          if (typeof encryptedKey !== 'string') {
+            console.error(`第 ${index + 1} 个 key 不是字符串类型`);
+            return null;
+          }
           console.log('加密 key 长度:', encryptedKey.length);
           console.log('加密 key 前 20 个字符:', encryptedKey.substring(0, 20));
           try {
