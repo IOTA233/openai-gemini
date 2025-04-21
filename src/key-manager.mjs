@@ -64,44 +64,60 @@ export class KeyManager {
 
   // 解密函数
   async decrypt(encryptedText) {
-    const decoder = new TextDecoder();
-    const encryptedData = Uint8Array.from(atob(encryptedText), c => c.charCodeAt(0));
+    console.log('开始解密过程');
+    console.log('加密文本长度:', encryptedText.length);
+    console.log('加密文本前 20 个字符:', encryptedText.substring(0, 20));
 
-    const salt = encryptedData.slice(0, 16);
-    const iv = encryptedData.slice(16, 28);
-    const data = encryptedData.slice(28);
+    try {
+      const decoder = new TextDecoder();
+      console.log('尝试 base64 解码');
+      const encryptedData = Uint8Array.from(atob(encryptedText), c => c.charCodeAt(0));
+      console.log('base64 解码成功，数据长度:', encryptedData.length);
 
-    const keyMaterial = await crypto.subtle.importKey(
-      'raw',
-      new TextEncoder().encode(this.encryptionKey),
-      'PBKDF2',
-      false,
-      ['deriveBits', 'deriveKey']
-    );
+      const salt = encryptedData.slice(0, 16);
+      const iv = encryptedData.slice(16, 28);
+      const data = encryptedData.slice(28);
+      console.log('数据分割完成 - salt:', salt.length, 'iv:', iv.length, 'data:', data.length);
 
-    const key = await crypto.subtle.deriveKey(
-      {
-        name: 'PBKDF2',
-        salt,
-        iterations: 100000,
-        hash: 'SHA-256'
-      },
-      keyMaterial,
-      this.algorithm,
-      false,
-      ['decrypt']
-    );
+      const keyMaterial = await crypto.subtle.importKey(
+        'raw',
+        new TextEncoder().encode(this.encryptionKey),
+        'PBKDF2',
+        false,
+        ['deriveBits', 'deriveKey']
+      );
+      console.log('密钥材料导入成功');
 
-    const decryptedContent = await crypto.subtle.decrypt(
-      {
-        name: 'AES-GCM',
-        iv
-      },
-      key,
-      data
-    );
+      const key = await crypto.subtle.deriveKey(
+        {
+          name: 'PBKDF2',
+          salt,
+          iterations: 100000,
+          hash: 'SHA-256'
+        },
+        keyMaterial,
+        this.algorithm,
+        false,
+        ['decrypt']
+      );
+      console.log('密钥派生成功');
 
-    return decoder.decode(decryptedContent);
+      const decryptedContent = await crypto.subtle.decrypt(
+        {
+          name: 'AES-GCM',
+          iv
+        },
+        key,
+        data
+      );
+      console.log('解密成功');
+
+      return decoder.decode(decryptedContent);
+    } catch (error) {
+      console.error('解密过程中出错:', error);
+      console.error('错误堆栈:', error.stack);
+      throw error;
+    }
   }
 
   // 存储加密的 API key
@@ -135,24 +151,32 @@ export class KeyManager {
 
   // 验证密码并获取 API key
   async verifyAndGetKey(password) {
+    console.log('开始验证密码:', password);
     // 如果不是预设 key，直接返回输入的 key
     if (password !== PRESET_KEY) {
+      console.log('使用非预设 key，直接返回');
       return password;
     }
 
     try {
       console.log('开始获取加密的 API key');
       const encryptedKeysStr = await this.redis.get('encrypted_api_keys');
+      console.log('从 Redis 获取到的原始数据:', encryptedKeysStr);
+
       if (!encryptedKeysStr) {
+        console.log('Redis 中没有找到加密的 API key');
         throw new Error('No API key found');
       }
 
       // 确保 encryptedKeysStr 是有效的 JSON 字符串
       let encryptedKeys;
       try {
+        console.log('尝试解析 JSON 字符串');
         encryptedKeys = JSON.parse(encryptedKeysStr);
+        console.log('JSON 解析成功，解析结果:', encryptedKeys);
       } catch (e) {
         console.error('解析加密 key 时出错:', e);
+        console.log('尝试作为单个 key 处理');
         // 如果不是 JSON 格式，可能是单个 key
         encryptedKeys = [encryptedKeysStr];
       }
@@ -163,10 +187,15 @@ export class KeyManager {
       const decryptedKeys = await Promise.all(
         encryptedKeys.map(async (encryptedKey, index) => {
           console.log(`正在解密第 ${index + 1} 个 key`);
+          console.log('加密 key 长度:', encryptedKey.length);
+          console.log('加密 key 前 20 个字符:', encryptedKey.substring(0, 20));
           try {
-            return await this.decrypt(encryptedKey);
+            const decrypted = await this.decrypt(encryptedKey);
+            console.log(`第 ${index + 1} 个 key 解密成功`);
+            return decrypted;
           } catch (error) {
             console.error(`解密第 ${index + 1} 个 key 时出错:`, error);
+            console.error('错误堆栈:', error.stack);
             return null;
           }
         })
@@ -174,8 +203,10 @@ export class KeyManager {
 
       // 过滤掉解密失败的 key
       const validKeys = decryptedKeys.filter(key => key !== null);
+      console.log('解密成功的 key 数量:', validKeys.length);
 
       if (validKeys.length === 0) {
+        console.log('没有找到有效的 API key');
         throw new Error('No valid API keys found after decryption');
       }
 
