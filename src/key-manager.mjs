@@ -160,7 +160,7 @@ export class KeyManager {
 
     try {
       console.log('开始获取加密的 API key');
-      const encryptedKeys = await this.redis.get('encrypted_api_keys');
+      let encryptedKeys = await this.redis.get('encrypted_api_keys');
       console.log('从 Redis 获取到的原始数据:', encryptedKeys);
 
       if (!encryptedKeys) {
