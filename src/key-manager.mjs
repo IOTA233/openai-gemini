@@ -160,35 +160,12 @@ export class KeyManager {
 
     try {
       console.log('开始获取加密的 API key');
-      const encryptedKeysStr = await this.redis.get('encrypted_api_keys');
-      console.log('从 Redis 获取到的原始数据:', encryptedKeysStr);
+      const encryptedKeys = await this.redis.get('encrypted_api_keys');
+      console.log('从 Redis 获取到的原始数据:', encryptedKeys);
 
-      if (!encryptedKeysStr) {
+      if (!encryptedKeys) {
         console.log('Redis 中没有找到加密的 API key');
         throw new Error('No API key found');
-      }
-
-      // 处理 Redis 返回的数据
-      let encryptedKeys;
-      try {
-        // 尝试解析 JSON 字符串
-        encryptedKeys = JSON.parse(encryptedKeysStr);
-        console.log('JSON 解析成功，解析结果:', encryptedKeys);
-      } catch (e) {
-        console.error('解析加密 key 时出错:', e);
-        // 如果解析失败，可能是 Redis 返回的字符串格式不正确
-        // 尝试手动处理字符串
-        try {
-          // 移除可能的方括号和引号
-          const cleanedStr = encryptedKeysStr.replace(/[\[\]"]/g, '');
-          // 按逗号分割并过滤空值
-          encryptedKeys = cleanedStr.split(',').filter(key => key.trim());
-          console.log('手动处理后的 key 数组:', encryptedKeys);
-        } catch (parseError) {
-          console.error('手动处理 key 时出错:', parseError);
-          // 如果还是失败，将整个字符串作为单个 key
-          encryptedKeys = [encryptedKeysStr];
-        }
       }
 
       if (!Array.isArray(encryptedKeys)) {
