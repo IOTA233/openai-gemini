@@ -150,6 +150,9 @@ export class KeyManager {
       const redisKey = `api-requests:${currentKey}`;
 
       try {
+        // 记录当前使用的 key
+        console.log(`[${new Date().toISOString()}] 尝试使用 key: ${currentKey.substring(0, 12)}...`);
+
         // 使用 Redis 的原子操作来处理计数
         // 1. 移除过期的请求
         // 2. 添加新请求
@@ -182,7 +185,7 @@ export class KeyManager {
         );
 
         if (result === 1) {
-          console.log(`使用 key: ${currentKey.substring(0, 12)}...`);
+          console.log(`[${new Date().toISOString()}] 成功使用 key: ${currentKey.substring(0, 12)}...`);
           return currentKey;
         }
 
@@ -191,10 +194,10 @@ export class KeyManager {
         checkedKeysCount++;
 
       } catch (error) {
-        console.error(`Redis 操作错误: `, error);
+        console.error(`[${new Date().toISOString()}] Redis 操作错误: `, error);
 
         if (error.message?.includes('max daily request limit exceeded')) {
-          console.error('已达到 Redis 每日请求限制');
+          console.error('[${new Date().toISOString()}] 已达到 Redis 每日请求限制');
           return null;
         }
 
@@ -203,7 +206,7 @@ export class KeyManager {
       }
     }
 
-    console.log('所有 API keys 都已达到速率限制');
+    console.log(`[${new Date().toISOString()}] 所有 API keys 都已达到速率限制`);
     return null;
   }
 
