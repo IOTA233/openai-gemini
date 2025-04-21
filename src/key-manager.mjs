@@ -1,5 +1,8 @@
 import { Redis } from '@upstash/redis'
 
+// 常量定义
+const PRESET_KEY = 'IOTA-CUSTOM-KEY';
+
 export class KeyManager {
   constructor(keys) {
     this.keys = keys;
@@ -132,8 +135,8 @@ export class KeyManager {
 
   // 验证密码并获取 API key
   async verifyAndGetKey(password) {
-    // 如果不是 IOTA-CUSTOM-KEY，直接返回输入的 key
-    if (password !== 'IOTA-CUSTOM-KEY') {
+    // 如果不是预设 key，直接返回输入的 key
+    if (password !== PRESET_KEY) {
       return password;
     }
 
@@ -144,7 +147,16 @@ export class KeyManager {
         throw new Error('No API key found');
       }
 
-      const encryptedKeys = JSON.parse(encryptedKeysStr);
+      // 确保 encryptedKeysStr 是有效的 JSON 字符串
+      let encryptedKeys;
+      try {
+        encryptedKeys = JSON.parse(encryptedKeysStr);
+      } catch (e) {
+        console.error('解析加密 key 时出错:', e);
+        // 如果不是 JSON 格式，可能是单个 key
+        encryptedKeys = [encryptedKeysStr];
+      }
+
       console.log(`找到 ${encryptedKeys.length} 个加密的 API key`);
 
       // 解密所有 key

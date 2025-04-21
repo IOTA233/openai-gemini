@@ -1,5 +1,6 @@
 let KeyManager;
 let keyManager;
+let PRESET_KEY;
 
 export default async function handler(req, res) {
   console.log('收到初始化请求');
@@ -14,6 +15,7 @@ export default async function handler(req, res) {
       const module = await import('../src/key-manager.mjs');
       KeyManager = module.KeyManager;
       keyManager = new KeyManager();
+      PRESET_KEY = 'IOTA-CUSTOM-KEY';
     }
 
     const { password, apiKey } = req.body;
@@ -26,7 +28,7 @@ export default async function handler(req, res) {
 
     let finalApiKey;
 
-    if (password === 'IOTA-CUSTOM-KEY') {
+    if (password === PRESET_KEY) {
       console.log('设置预置的 API key');
       finalApiKey = apiKey;
     } else {
