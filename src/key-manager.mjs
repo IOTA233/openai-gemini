@@ -101,6 +101,35 @@ export class KeyManager {
     return decoder.decode(decryptedContent);
   }
 
+  // 存储加密的 API key
+  async storeEncryptedKey(apiKey) {
+    try {
+      console.log('开始加密 API key');
+      // 将 API key 按逗号分割成数组
+      const apiKeys = apiKey.split(',').map(key => key.trim());
+      console.log(`共 ${apiKeys.length} 个 API key 需要加密`);
+
+      // 分别加密每个 key
+      const encryptedKeys = await Promise.all(
+        apiKeys.map(async (key, index) => {
+          console.log(`正在加密第 ${index + 1} 个 key`);
+          const encrypted = await this.encrypt(key);
+          return encrypted;
+        })
+      );
+
+      console.log('所有 key 加密完成，开始存储到 Redis');
+      // 将加密后的 key 数组存储到 Redis
+      await this.redis.set('encrypted_api_keys', JSON.stringify(encryptedKeys));
+      console.log('API key 存储成功');
+      return true;
+    } catch (error) {
+      console.error('存储加密 key 时发生错误:', error);
+      console.error('错误堆栈:', error.stack);
+      return false;
+    }
+  }
+
   // 验证密码并获取 API key
   async verifyAndGetKey(password) {
     if (password !== 'mycustomkey') {
@@ -108,30 +137,29 @@ export class KeyManager {
     }
 
     try {
-      // 从 Redis 获取加密的 API key
-      const encryptedKey = await this.redis.get('encrypted_api_key');
-      if (!encryptedKey) {
+      console.log('开始获取加密的 API key');
+      const encryptedKeysStr = await this.redis.get('encrypted_api_keys');
+      if (!encryptedKeysStr) {
         throw new Error('No API key found');
       }
 
-      // 解密 API key
-      const decryptedKey = await this.decrypt(encryptedKey);
-      this.initializeKeys(decryptedKey);
-      return true;
-    } catch (error) {
-      console.error('Error verifying key:', error);
-      return false;
-    }
-  }
+      const encryptedKeys = JSON.parse(encryptedKeysStr);
+      console.log(`找到 ${encryptedKeys.length} 个加密的 API key`);
 
-  // 存储加密的 API key
-  async storeEncryptedKey(apiKey) {
-    try {
-      const encryptedKey = await this.encrypt(apiKey);
-      await this.redis.set('encrypted_api_key', encryptedKey);
+      // 解密所有 key
+      const decryptedKeys = await Promise.all(
+        encryptedKeys.map(async (encryptedKey, index) => {
+          console.log(`正在解密第 ${index + 1} 个 key`);
+          return await this.decrypt(encryptedKey);
+        })
+      );
+
+      console.log('所有 key 解密完成');
+      this.initializeKeys(decryptedKeys.join(','));
       return true;
     } catch (error) {
-      console.error('Error storing encrypted key:', error);
+      console.error('验证 key 时发生错误:', error);
+      console.error('错误堆栈:', error.stack);
       return false;
     }
   }
