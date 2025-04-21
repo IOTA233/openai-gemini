@@ -132,8 +132,9 @@ export class KeyManager {
 
   // 验证密码并获取 API key
   async verifyAndGetKey(password) {
-    if (password !== 'mycustomkey') {
-      throw new Error('Invalid password');
+    // 如果不是 IOTA-CUSTOM-KEY，直接返回输入的 key
+    if (password !== 'IOTA-CUSTOM-KEY') {
+      return password;
     }
 
     try {
@@ -155,12 +156,12 @@ export class KeyManager {
       );
 
       console.log('所有 key 解密完成');
-      this.initializeKeys(decryptedKeys.join(','));
-      return true;
+      // 返回解密后的 key
+      return decryptedKeys.join(',');
     } catch (error) {
       console.error('验证 key 时发生错误:', error);
       console.error('错误堆栈:', error.stack);
-      return false;
+      return null;
     }
   }
 

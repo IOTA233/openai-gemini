@@ -24,13 +24,18 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    if (password !== 'mycustomkey') {
-      console.log('密码错误');
-      return res.status(401).json({ error: 'Invalid password' });
+    let finalApiKey;
+
+    if (password === 'IOTA-CUSTOM-KEY') {
+      console.log('设置预置的 API key');
+      finalApiKey = apiKey;
+    } else {
+      console.log('设置用户提供的 API key');
+      finalApiKey = password;
     }
 
     console.log('开始存储 API key');
-    const success = await keyManager.storeEncryptedKey(apiKey);
+    const success = await keyManager.storeEncryptedKey(finalApiKey);
 
     if (success) {
       console.log('API key 存储成功');
