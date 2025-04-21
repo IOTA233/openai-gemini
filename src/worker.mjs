@@ -22,14 +22,7 @@ export default {
       const auth = request.headers.get("Authorization");
       let apiKeys = auth?.split(" ")[1];
 
-      // 如果输入的是 mycustomkey，获取预置的 key
-      if (apiKeys === 'mycustomkey') {
-        console.log('使用预置的 API key');
-        apiKeys = await keyManager.verifyAndGetKey(apiKeys);
-        if (!apiKeys) {
-          throw new HttpError("No preset API key found", 401);
-        }
-      }
+      apiKeys = await keyManager.verifyAndGetKey(apiKeys);
 
       // 初始化API keys
       keyManager.initializeKeys(apiKeys);
