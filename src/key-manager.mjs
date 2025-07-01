@@ -12,8 +12,8 @@ export class KeyManager {
 
     // 使用 Redis 作为唯一的计数存储
     this.redis = new Redis({
-      url: 'https://cunning-gull-10062.upstash.io',
-      token: 'ASdOAAIjcDE3Yzk1NjY1MmRlM2I0Y2FhYmI4ZDNkZjkyODQ0MGVkNXAxMA',
+      url: 'https://finer-wren-27114.upstash.io',
+      token: 'AWnqAAIjcDFmZjY4MGU4ZjA3ZTI0ZjYxODgxZmZjNmZmY2NiNmRmZXAxMA',
     });
   }
 
