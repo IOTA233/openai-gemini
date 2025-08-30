@@ -12,9 +12,9 @@ export class KeyManager {
 
     // 使用 Redis 作为唯一的计数存储
     this.redis = new Redis({
-      url: 'https://finer-wren-27114.upstash.io',
-      token: 'AWnqAAIjcDFmZjY4MGU4ZjA3ZTI0ZjYxODgxZmZjNmZmY2NiNmRmZXAxMA',
-    });
+      url: 'https://dominant-porpoise-20738.upstash.io',
+      token: 'AVECAAIncDExNWRmNGI0ODllZDU0ZmE5ODZkZDcyMTU1YTQ2NWRlYXAxMjA3Mzg',
+    })
   }
 
   // 加密函数
