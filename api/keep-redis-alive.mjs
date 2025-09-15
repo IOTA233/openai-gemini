@@ -2,8 +2,8 @@ import { Redis } from '@upstash/redis';
 
 export default async function handler(request, response) {
   const redis = new Redis({
-    url: process.env.UPSTASH_REDIS_REST_URL,
-    token: process.env.UPSTASH_REDIS_REST_TOKEN,
+    url: process.env.REDIS_KV_URL || 'https://dominant-porpoise-20738.upstash.io',
+    token: process.env.REDIS_KV_REST_API_TOKEN || 'AVECAAIncDExNWRmNGI0ODllZDU0ZmE5ODZkZDcyMTU1YTQ2NWRlYXAxMjA3Mzg',
   });
 
   try {
