@@ -12,8 +12,8 @@ export class KeyManager {
 
     // 使用 Redis 作为唯一的计数存储
     this.redis = new Redis({
-      url: 'https://dominant-porpoise-20738.upstash.io',
-      token: 'AVECAAIncDExNWRmNGI0ODllZDU0ZmE5ODZkZDcyMTU1YTQ2NWRlYXAxMjA3Mzg',
+      url: process.env.UPSTASH_REDIS_REST_URL,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN,
     })
   }
 
